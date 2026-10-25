@@ -3,7 +3,7 @@
 本文约束 sop-v2 自身。执行需求时不用读；改任何 skill、模板、precheck 前必须读，改完跑：
 
 ```
-python sop-s2-implement-deliver/precheck.py --lint-sop <sop-v2 目录> --config artifacts/_project/precheck.json
+python sop-s2-implement-deliver/precheck.py --lint-sop <sop-v2 目录> --config artifacts/_project/S0-02-precheck.json
 ```
 
 末行 `RESULT: PASS` 才算改完。
@@ -13,8 +13,8 @@ python sop-s2-implement-deliver/precheck.py --lint-sop <sop-v2 目录> --config 
 | 层 | 放什么 | 位置 | 换项目时 |
 |----|--------|------|---------|
 | skill | 步骤、出口、门禁、问题分类、模板骨架、precheck 检查逻辑 | `sop-v2/sop-*` | 不改 |
-| 项目手册 | 仓库地图、共享边界、公共机制、术语映射、参照功能、平台登记、登记占用、环境 | `artifacts/_project/项目手册.md` | 重建一份 |
-| precheck 参数 | 接口前缀、表前缀、前端别名、参考目录、身份字段、项目专有名词 | `artifacts/_project/precheck.json` | S0 建，S2 Step 0 补 |
+| 项目手册 | 仓库地图、共享边界、公共机制、术语映射、参照功能、平台登记、登记占用、环境 | `artifacts/_project/S0-01-项目手册.md` | 重建一份 |
+| precheck 参数 | 接口前缀、表前缀、前端别名、参考目录、身份字段、项目专有名词 | `artifacts/_project/S0-02-precheck.json` | S0 建，S2 Step 0 补 |
 | 需求产物 | 本需求的口径、编码、设计、坑 | `artifacts/{需求}/` | 不复用 |
 
 - skill 里不出现任何项目或需求专有内容：仓名、服务名、包名、类名、表名、字段名、字典编码、配置键、地址、人名、需求编号、某个业务场景独有的规则。举例只用占位符：`{仓}`、`{Helper}`、`tb_{xxx}`。

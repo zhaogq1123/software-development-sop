@@ -7,7 +7,7 @@ description: 维护跨需求的项目事实手册（仓库地图、共享边界�
 
 ## 目标
 
-一份文件 `artifacts/_project/项目手册.md`，让任何需求的 S1 开工时，10 分钟内知道：代码放哪、哪些仓不能随便改、公共机制怎么用、要做某类功能该参照哪个现成功能、构建环境长什么样。
+一份文件 `artifacts/_project/S0-01-项目手册.md`，让任何需求的 S1 开工时，10 分钟内知道：代码放哪、哪些仓不能随便改、公共机制怎么用、要做某类功能该参照哪个现成功能、构建环境长什么样。
 
 它不是代码基线，不追求覆盖所有模块。只记「被用过两次以上、以后还会用」的事实。
 
@@ -32,7 +32,7 @@ description: 维护跨需求的项目事实手册（仓库地图、共享边界�
 
 ## 产出
 
-`artifacts/_project/项目手册.md`，结构见同目录 `项目手册.模板.md`；`artifacts/_project/precheck.json`（项目级：`api_prefixes` `table_prefixes` 覆盖全部仓，不只本需求；`fe_aliases`；`ref_dirs` 只读参照目录，用于跨服务路径与类核对；`identity_fields`；`project_terms` 供 SOP lint，见 SOP约束 › lint 查什么）。
+`artifacts/_project/S0-01-项目手册.md`，结构见同目录 `S0-01-项目手册.模板.md`；`artifacts/_project/S0-02-precheck.json`（项目级：`api_prefixes` `table_prefixes` 覆盖全部仓，不只本需求；`fe_aliases`；`ref_dirs` 只读参照目录，用于跨服务路径与类核对；`identity_fields`；`project_terms` 供 SOP lint，见 SOP约束 › lint 查什么）。
 
 ## 出口
 

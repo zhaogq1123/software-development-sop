@@ -7,10 +7,10 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
                      [--handoff <改动包目录>] [--base <目录名>=<基线commit>] [--no-patch] [--allow-dirty]
                      [--write-manifest] [--config <precheck.json>] [--s1 <S1目录>]
   python precheck.py --lint-sop <sop-v2目录> [--config <precheck.json>]
-  python precheck.py --ingest <原文文件> [<原文文件> ...] --out <S1/原文>
+  python precheck.py --ingest <原文文件> [<原文文件> ...] --out <S1/S1-00-原文>
   python precheck.py --selftest
-  --out 放文档（上线手册、验证清单、审查.md、sql/、config/）；--handoff 放 patches/README/manifest（离线快照 / 本机不可编译）。
-  --s1 默认取 --out 的同级 S1/（读 设计说明.md / 设计.md / 需求与验收.md）。
+  --out 放文档（上线手册、验证清单、S2-08-审查.md、S2-02-sql/、S2-03-config/）；--handoff 放 patches/README/manifest（离线快照 / 本机不可编译）。
+  --s1 默认取 --out 的同级 S1/（读 S1-04-设计说明.md / S1-07-设计.md / S1-02-需求与验收.md）。
 
 --repo 可以是独立 git 仓，也可以是大仓里的子目录：脚本用 git 定位仓根，只统计该目录下的改动。
 报告列出每个目录检查了多少文件；同一大仓里有改动却没传进 --repo 的目录会被列出（U1）。
@@ -18,31 +18,31 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
 
 检查项：
   H1 交付目录文件齐全              G1 无未提交文件（--allow-dirty 降 WARN）
-  H2 交付目录不留 verify/out.txt、verify/env.local（自测输出与凭据）
-  J1 Java import 可解析            J2 实体字段 ↔ sql/ DDL 列（跳过 @TableField(exist=false)、static）
+  H2 交付目录不留 S2-04-verify/out.txt、S2-04-verify/env.local（自测输出与凭据）
+  J1 Java import 可解析            J2 实体字段 ↔ S2-02-sql/ DDL 列（跳过 @TableField(exist=false)、static）
   F1 前端 import 可解析            F2 前端请求路径 ↔ Controller 映射
-  Q1 上线手册含 sql/*.sql 原文，或「文件名 + sha256:哈希」引用
-  Q2 上线手册包含 config/*.diff 的每条改动行
+  Q1 上线手册含 S2-02-sql/*.sql 原文，或「文件名 + sha256:哈希」引用
+  Q2 上线手册包含 S2-03-config/*.diff 的每条改动行
   Q3 SQL 可重入（CREATE TABLE 缺 IF NOT EXISTS、INSERT 无 NOT EXISTS/ON DUPLICATE/IGNORE/先删 → ERROR）
-  N1 config/*.diff 新增接口路径 ↔ Controller 映射
+  N1 S2-03-config/*.diff 新增接口路径 ↔ Controller 映射
   N2 Feign 调用路径 ↔ 提供方 Controller 映射（含 ref_dirs）
   S1 Controller 入参 DTO 含身份字段（安全类，仅 WARN）
   C1 S1「改动面」列出的每个仓、以及带扩展名的文件都有改动       C2 代码走读「接触点」里要改/新建的仓都在改动面
-  D1 新功能 S1 产物结构（评审摘要、接口调用者/数据范围/状态前置、按建议会怎样、手册术语映射）；精简版设计.md 同样要有评审摘要、按建议会怎样、交付选项
+  D1 新功能 S1 产物结构（评审摘要、接口调用者/数据范围/状态前置、按建议会怎样、手册术语映射）；精简版S1-07-设计.md 同样要有评审摘要、按建议会怎样、交付选项
   D2 决定表里状态为有效的 D-xx 必须出现在验收里；有设计说明就得有决定表
-  R1 审查.md：AC 全覆盖、结论用规定词、引用位置存在、环境登记的节名在上线手册里、阻塞类问题无「待修」
+  R1 S2-08-审查.md：AC 全覆盖、结论用规定词、引用位置存在、环境登记的节名在上线手册里、阻塞类问题无「待修」
   V1 审查结论为已实现或环境登记的 AC 必须写进验证清单
-  X1 S1/原文/正文.md 为 UTF-8 且无替换字符；media/ 每张图在清单里有状态，待看和无法看不能过
+  X1 S1/S1-00-原文/正文.md 为 UTF-8 且无替换字符；media/ 每张图在清单里有状态，待看和无法看不能过
   K1 类型为小改动、线上缺陷、纯配置时，不得另有新建表、平台登记或（纯配置）代码改动
   U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo
   T1 改动文件不留「待联调核对」类标记（config.defer_markers）
-  A1 S2/api/ 接口文档与冒烟集合的路径都在 Controller 映射里；集合覆盖 verify/cases.json 的全部 AC
+  A1 S2/S2-05-api/ 接口文档与冒烟集合的路径都在 Controller 映射里；集合覆盖 S2-04-verify/cases.json 的全部 AC
   M1 manifest 哈希（仅改动包形态）
   P1 改动文件路径不存在            E0 没有改动文件
   --lint-sop：L1 篇幅上限  L2 正文出现具体日期  L3 出现 project_terms
 
 已知局限：外部依赖的类只能判断「依赖大概率存在」，类名对不对由编译确认；行为、口径、时效参数不在检查范围。
-项目参数从 --config JSON 读，默认见 DEFAULT_CONFIG；放 artifacts/_project/precheck.json，项目级，不按需求裁剪。
+项目参数从 --config JSON 读，默认见 DEFAULT_CONFIG；放 artifacts/_project/S0-02-precheck.json，项目级，不按需求裁剪。
 退出码 0 PASS / 1 FAIL。
 """
 import argparse, hashlib, io, json, os, re, shutil, subprocess, sys, tempfile, zipfile
@@ -291,7 +291,7 @@ def _all_tables(text):
 
 def requirement_type(s1):
     if not s1.is_dir(): return ""
-    blobs = [read(p) for p in (s1.parent / "当前位置.md", s1 / "设计.md", s1 / "设计说明.md") if p.exists()]
+    blobs = [read(p) for p in (s1.parent / "00-当前位置.md", s1 / "S1-07-设计.md", s1 / "S1-04-设计说明.md") if p.exists()]
     m = re.search(r'类型[:：]\s*([^\s（(]+)', "\n".join(blobs))
     return m.group(1) if m else ""
 
@@ -306,8 +306,8 @@ def check_type(s1, sql_files, changed, rep):
     if kind.startswith("纯配置") and changed:
         rep.err("K1", "类型是纯配置，但检测到代码改动。有代码改动不能标纯配置")
     if any(re.search(r'CREATE\s+TABLE\b', read(f), re.I) for f in sql_files):
-        rep.err("K1", f"类型是{kind}，但 sql/ 里有新建表。新建表应按新功能做全套，不能靠类型跳过")
-    walk = s1 / "代码走读.md"
+        rep.err("K1", f"类型是{kind}，但 S2-02-sql/ 里有新建表。新建表应按新功能做全套，不能靠类型跳过")
+    walk = s1 / "S1-03-代码走读.md"
     if not walk.exists(): return
     rows = md_table_after(read(walk), "平台登记", header=True)
     if not rows: return
@@ -321,16 +321,16 @@ def check_type(s1, sql_files, changed, rep):
 
 
 def check_decisions(s1, rep):
-    dec = s1 / "决定表.md"
+    dec = s1 / "S1-01-决定表.md"
     if not dec.exists():
-        if (s1 / "设计说明.md").exists():
-            rep.err("D2", "有设计说明.md 但没有决定表.md，有效原句没有登记")
+        if (s1 / "S1-04-设计说明.md").exists():
+            rep.err("D2", "有 S1-04-设计说明.md 但没有 S1-01-决定表.md，有效原句没有登记")
         return
     table = next((t for t in _all_tables(read(dec)) if t and "编号" in t[0] and "状态" in t[0]), None)
     if not table:
-        rep.err("D2", "决定表.md 没有「编号 / 状态」表"); return
+        rep.err("D2", "S1-01-决定表.md 没有「编号 / 状态」表"); return
     id_i, st_i = table[0].index("编号"), table[0].index("状态")
-    acc = "\n".join(read(s1 / n) for n in ("需求与验收.md", "设计.md", "设计说明.md") if (s1 / n).exists())
+    acc = "\n".join(read(s1 / n) for n in ("S1-02-需求与验收.md", "S1-07-设计.md", "S1-04-设计说明.md") if (s1 / n).exists())
     for cells in table[1:]:
         did = cells[id_i].strip() if id_i < len(cells) else ""
         status = cells[st_i].strip() if st_i < len(cells) else ""
@@ -354,18 +354,18 @@ def _section_empty(txt, name):
 
 def check_source(s1, rep):
     if not s1.is_dir(): return
-    root = s1 / "原文"
+    root = s1 / "S1-00-原文"
     body, manifest = root / "正文.md", root / "清单.md"
     if not body.exists():
-        rep.err("X1", "S1/原文/正文.md 不存在。原文先经 precheck.py --ingest 落盘，决定表只引用该文件"); return
+        rep.err("X1", "S1/S1-00-原文/正文.md 不存在。原文先经 precheck.py --ingest 落盘，决定表只引用该文件"); return
     try:
         txt = body.read_bytes().decode("utf-8")
     except UnicodeDecodeError:
-        rep.err("X1", "S1/原文/正文.md 不是 UTF-8"); return
+        rep.err("X1", "S1/S1-00-原文/正文.md 不是 UTF-8"); return
     if txt.startswith("\ufeff") or "\ufffd" in txt:
-        rep.err("X1", "S1/原文/正文.md 含 BOM 或替换字符")
+        rep.err("X1", "S1/S1-00-原文/正文.md 含 BOM 或替换字符")
     if not manifest.exists():
-        rep.err("X1", "S1/原文/清单.md 不存在"); return
+        rep.err("X1", "S1/S1-00-原文/清单.md 不存在"); return
     rows = md_table_after(read(manifest), "图片", header=True) or []
     listed = {}
     if len(rows) > 1:
@@ -616,24 +616,24 @@ def ingest(paths, out_dir):
 
 def check_s1_shape(s1, doc, rep):
     txt = read(doc)
-    if not re.search(r'^#+.*评审摘要', txt, re.M): rep.err("D1", "设计说明.md 缺「评审摘要」（S1 评审先发它）")
+    if not re.search(r'^#+.*评审摘要', txt, re.M): rep.err("D1", "S1-04-设计说明.md 缺「评审摘要」（S1 评审先发它）")
     if not any(l.lstrip().startswith("|") and all(k in l for k in ("调用者", "数据范围", "状态前置")) for l in txt.splitlines()):
-        rep.err("D1", "设计说明.md 接口契约缺 调用者/数据范围/状态前置 列")
-    pend = s1 / "待定决策.md"
+        rep.err("D1", "S1-04-设计说明.md 接口契约缺 调用者/数据范围/状态前置 列")
+    pend = s1 / "S1-05-待定决策.md"
     if pend.exists():
         ptxt = read(pend)
-        if "按建议会怎样" not in ptxt: rep.err("D1", "待定决策.md 缺「按建议会怎样」列")
-        _delivery_options(ptxt, "待定决策.md", rep)
-    flow = s1 / "交互流程.md"
+        if "按建议会怎样" not in ptxt: rep.err("D1", "S1-05-待定决策.md 缺「按建议会怎样」列")
+        _delivery_options(ptxt, "S1-05-待定决策.md", rep)
+    flow = s1 / "S1-06-交互流程.md"
     api = md_table_after(txt, "接口契约", header=True)
     pcol = next((i for i, h in enumerate(api[0]) if "路径" in h), None) if api else None
     if flow.exists() and pcol is not None:
         arrows = "\n".join(l for l in read(flow).splitlines() if ">>" in l)
         for cells in api[1:]:
             p = re.split(r'[?\s\[{]', cells[pcol].strip("` ") if pcol < len(cells) else "")[0]
-            if p and p not in arrows: rep.err("D1", f"交互流程.md 没有把接口 {p} 画进时序图箭头（覆盖表登记不算）")
-    hb = s1.parent.parent / "_project" / "项目手册.md"
-    if hb.exists() and not re.search(r'^#+.*术语映射', read(hb), re.M): rep.err("D1", "项目手册.md 缺「术语映射」小节")
+            if p and p not in arrows: rep.err("D1", f"S1-06-交互流程.md 没有把接口 {p} 画进时序图箭头（覆盖表登记不算）")
+    hb = s1.parent.parent / "_project" / "S0-01-项目手册.md"
+    if hb.exists() and not re.search(r'^#+.*术语映射', read(hb), re.M): rep.err("D1", "S0-01-项目手册.md 缺「术语映射」小节")
 
 
 def _delivery_options(text, where, rep):
@@ -650,21 +650,21 @@ def _delivery_options(text, where, rep):
 
 
 def check_slim_shape(doc, rep):
-    """小改动、线上缺陷、纯配置的设计.md：不套用新功能的接口三列，但这三项不能靠类型跳过。"""
+    """小改动、线上缺陷、纯配置的S1-07-设计.md：不套用新功能的接口三列，但这三项不能靠类型跳过。"""
     txt = read(doc)
-    if not re.search(r'^#+.*评审摘要', txt, re.M): rep.err("D1", "设计.md 缺「评审摘要」（S1 评审先发它）")
-    if "按建议会怎样" not in txt: rep.err("D1", "设计.md 缺「按建议会怎样」列")
-    _delivery_options(txt, "设计.md", rep)
+    if not re.search(r'^#+.*评审摘要', txt, re.M): rep.err("D1", "S1-07-设计.md 缺「评审摘要」（S1 评审先发它）")
+    if "按建议会怎样" not in txt: rep.err("D1", "S1-07-设计.md 缺「按建议会怎样」列")
+    _delivery_options(txt, "S1-07-设计.md", rep)
 
 
 def check_plan(s1, changed_by_repo, repos, rep):
-    doc = next((s1 / f for f in ("设计说明.md", "设计.md") if (s1 / f).exists()), None)
-    if doc is None: rep.warn("C1", f"{s1} 下没有设计说明.md / 设计.md，跳过改动面核对"); return
-    if doc.name == "设计说明.md": check_s1_shape(s1, doc, rep)
+    doc = next((s1 / f for f in ("S1-04-设计说明.md", "S1-07-设计.md") if (s1 / f).exists()), None)
+    if doc is None: rep.warn("C1", f"{s1} 下没有 S1-04-设计说明.md / S1-07-设计.md，跳过改动面核对"); return
+    if doc.name == "S1-04-设计说明.md": check_s1_shape(s1, doc, rep)
     else: check_slim_shape(doc, rep)
     rows = md_table_after(read(doc), "改动面")
     if not rows: rep.err("C1", f"{doc.name} 没有「改动面」表（它是 S2 的任务清单）"); return
-    walk = md_table_after(read(s1 / "代码走读.md"), "接触点", header=True) if (s1 / "代码走读.md").exists() else None
+    walk = md_table_after(read(s1 / "S1-03-代码走读.md"), "接触点", header=True) if (s1 / "S1-03-代码走读.md").exists() else None
     if walk:
         planned = " ".join(" ".join(c) for c in rows)
         col = next((i for i, h in enumerate(walk[0]) if "做法" in h), None)
@@ -694,7 +694,7 @@ def check_plan(s1, changed_by_repo, repos, rep):
 
 
 def check_api(out, mappings, cfg, rep):
-    api = out / "api"
+    api = out / "S2-05-api"
     if not api.is_dir(): return
     def known(p):
         norm = re.sub(r'\{\{[^}]*\}\}|\{[^}]*\}|:\w+', '{}', p)
@@ -719,7 +719,7 @@ def check_api(out, mappings, cfg, rep):
                 path = re.sub(r'^(\{\{[^}]+\}\}|https?://[^/]+)', '', raw.strip()).split("?")[0]
                 if any(pf in path for pf in cfg["api_prefixes"]) and not known(path):
                     rep.err("A1", f"api/{f.name}: 用例「{it.get('name', '')}」请求 {path} 在 Controller 映射中未找到")
-    cases = out / "verify" / "cases.json"
+    cases = out / "S2-04-verify" / "cases.json"
     if coll_txt and cases.exists():
         miss = sorted(set(AC_RE.findall(read(cases))) - set(AC_RE.findall(coll_txt)), key=lambda x: int(x[3:]))
         if miss: rep.err("A1", f"冒烟集合未覆盖 verify 里的 {', '.join(miss)}")
@@ -735,14 +735,14 @@ def walk_files(dirs, cfg):
 
 
 def check_review(s1, out, repo_dirs, cfg, rep):
-    src = next((s1 / f for f in ("需求与验收.md", "设计.md") if (s1 / f).exists()), None)
-    if src is None: rep.warn("R1", f"{s1} 下没有需求与验收.md / 设计.md，跳过审查核对"); return
-    review = out / "审查.md"
-    if not review.exists(): rep.err("R1", "缺 S2/审查.md（独立审查未做）"); return
+    src = next((s1 / f for f in ("S1-02-需求与验收.md", "S1-07-设计.md") if (s1 / f).exists()), None)
+    if src is None: rep.warn("R1", f"{s1} 下没有 S1-02-需求与验收.md / S1-07-设计.md，跳过审查核对"); return
+    review = out / "S2-08-审查.md"
+    if not review.exists(): rep.err("R1", "缺 S2/S2-08-审查.md（独立审查未做）"); return
     rtxt = read(review)
     table = md_table_after(rtxt, "AC 实现映射", header=True) or [[]]
     col = next((i for i, h in enumerate(table[0]) if "结论" in h), -1)
-    cj = out / "verify" / "cases.json"
+    cj = out / "S2-04-verify" / "cases.json"
     verified = {a for v in re.findall(r'"ac"\s*:\s*"([^"]*)"', read(cj) if cj.exists() else "") for a in AC_RE.findall(v)}
     mapped = {}
     for cells in table[1:]:
@@ -750,7 +750,7 @@ def check_review(s1, out, repo_dirs, cfg, rep):
         if m: mapped[m.group(0)] = cells
     for ac in sorted(set(AC_RE.findall(read(src))), key=lambda x: int(x[3:])):
         cells = mapped.get(ac)
-        if cells is None: rep.err("R1", f"审查.md「AC 实现映射」缺 {ac}"); continue
+        if cells is None: rep.err("R1", f"S2-08-审查.md「AC 实现映射」缺 {ac}"); continue
         row, verdict = " ".join(cells), cells[col] if -len(cells) <= col < len(cells) else ""
         if not verdict.startswith(VERDICTS): rep.err("R1", f"{ac} 结论「{verdict[:20]}」不是 {'/'.join(VERDICTS)} 之一")
         elif verdict.startswith("未实现"): rep.err("R1", f"{ac} 未实现")
@@ -762,23 +762,23 @@ def check_review(s1, out, repo_dirs, cfg, rep):
             elif not titles:
                 rep.err("R1", f"{ac} 环境登记要写上线手册里的节名（用「」标出）")
             else:
-                heads = re.findall(r'^#+\s*(.+?)\s*$', read(out / "上线手册.md") if (out / "上线手册.md").exists() else "", re.M)
+                heads = re.findall(r'^#+\s*(.+?)\s*$', read(out / "S2-06-上线手册.md") if (out / "S2-06-上线手册.md").exists() else "", re.M)
                 for t in titles:
                     if not any(t.strip() == h or t.strip() in h for h in heads):
                         rep.err("R1", f"{ac} 环境登记指向的「{t}」在上线手册里没有这一节")
         elif verdict.startswith("本期不做") and ac in verified:
             rep.err("R1", f"{ac} 标本期不做但 verify 在测它：本端部分按已实现/未实现判，只有整条由另一端表现才本期不做")
-    checklist = read(out / "验证清单.md") if (out / "验证清单.md").exists() else ""
+    checklist = read(out / "S2-07-验证清单.md") if (out / "S2-07-验证清单.md").exists() else ""
     for ac, cells in mapped.items():
         verdict = cells[col] if -len(cells) <= col < len(cells) else ""
         if verdict.startswith(("已实现", "环境登记")) and ac not in checklist:
-            rep.err("V1", f"{ac} 审查结论是已实现或环境登记，验证清单.md 没有这条。清单全过盖不住没列入的验收")
+            rep.err("V1", f"{ac} 审查结论是已实现或环境登记，S2-07-验证清单.md 没有这条。清单全过盖不住没列入的验收")
     files = walk_files(repo_dirs, cfg)
     for path, line in sorted(set(LOC_RE.findall(rtxt))):
         tail = "/" + path.replace("\\", "/").lstrip("./")
         hit = next((f for f in files if f.as_posix().endswith(tail)), None)
         if hit is None or len(read(hit).splitlines()) < int(line):
-            rep.err("R1", f"审查.md 引用的位置 {path}:{line} 不存在")
+            rep.err("R1", f"S2-08-审查.md 引用的位置 {path}:{line} 不存在")
     for cells in md_table_after(rtxt, "问题") or []:
         row = " ".join(cells)
         if re.search(r'需求不符|交付与部署', row) and "待修" in row:
@@ -823,15 +823,15 @@ def run(a):
     handoff = Path(a.handoff) if getattr(a, "handoff", None) else (None if a.no_patch else out)
     bases = dict(b.split("=", 1) for b in a.base)
 
-    for f in ["上线手册.md", "验证清单.md"]:
+    for f in ["S2-06-上线手册.md", "S2-07-验证清单.md"]:
         if not (out / f).exists(): rep.err("H1", f"交付目录缺 {f}")
     if handoff is not None:
         if not (handoff / "README.md").exists(): rep.err("H1", "改动包缺 README.md")
         if not ((handoff / "patches").exists() and list((handoff / "patches").glob("*.patch"))):
             rep.err("H1", "改动包缺 patches/*.patch")
-    for f in ("verify/out.txt", "verify/env.local", "api/env.postman.json"):
+    for f in ("S2-04-verify/out.txt", "S2-04-verify/env.local", "S2-05-api/env.postman.json"):
         if (out / f).exists(): rep.err("H2", f"交付目录里还有 {f}（自测输出或凭据不进交付物，移到交付目录外）")
-    sql_files = sorted((out / "sql").glob("*.sql")) if (out / "sql").exists() else []
+    sql_files = sorted((out / "S2-02-sql").glob("*.sql")) if (out / "S2-02-sql").exists() else []
     sql_files = [f for f in sql_files if f.name != "reset_test.sql"]
 
     repos = []
@@ -892,8 +892,8 @@ def run(a):
                             if "static" in mods or re.search(r'exist\s*=\s*false', ann): continue
                             cm = re.search(r'@Table(?:Field|Id)\s*\(\s*(?:value\s*=\s*)?"([^"]+)"', ann)
                             col = cm.group(1) if cm else camel_to_snake(field)
-                            if col not in ddl[t]: rep.err("J2", f"{rel}: 字段 {field}→列 {col} 不在 sql/ DDL `{t}`")
-                    elif t not in idx["tables"]: rep.warn("J2", f"{rel}: @TableName {t} 既不在 sql/ DDL 也不在仓内已有表中")
+                            if col not in ddl[t]: rep.err("J2", f"{rel}: 字段 {field}→列 {col} 不在 S2-02-sql/ DDL `{t}`")
+                    elif t not in idx["tables"]: rep.warn("J2", f"{rel}: @TableName {t} 既不在 S2-02-sql/ DDL 也不在仓内已有表中")
                 check_feign(rel, txt, norm_mappings, rep)
                 check_identity(rel, txt, idx, cfg, rep)
             elif rel.endswith(FE_EXT):
@@ -930,7 +930,7 @@ def run(a):
         missed = sorted({f.split("/", 1)[0] for f in allc if "/" in f and not any(f.startswith(px) for px in prefixes)})
         if missed: rep.warn("U1", f"{root.name} 里这些目录有改动但未传 --repo，没有被检查：{', '.join(missed)}")
 
-    manual = read(out / "上线手册.md")
+    manual = read(out / "S2-06-上线手册.md")
     blocks = [norm_sql(b) for b in re.findall(r'```sql\s*\n(.*?)```', manual, re.S)]
     for sf in sql_files:
         check_sql_reentrant(sf, rep)
@@ -950,7 +950,7 @@ def run(a):
     else: rep.warn("C1", f"未找到 S1 目录 {s1}，跳过改动面与审查核对（C1/R1）")
     check_api(out, norm_mappings, cfg, rep)
 
-    cdir = out / "config"
+    cdir = out / "S2-03-config"
     if cdir.exists():
         manual_norm = re.sub(r'\s+', ' ', manual)
         pat = re.compile(r'((?:' + "|".join(map(re.escape, cfg["api_prefixes"])) + r')[A-Za-z0-9_\-/{}.*]+)')
@@ -1013,38 +1013,38 @@ def selftest():
         (other / "a.txt").write_text("changed", encoding="utf-8")
         (web / "src/api/mode.ts").write_text("// 项目模式映射需内网联调核对\nexport const M = '1';\n", encoding="utf-8")
         g("add", "-A"); g("commit", "-qm", "feat")
-        out = T / "out"; (out / "patches").mkdir(parents=True); (out / "sql").mkdir(); (out / "config").mkdir()
-        for f in ["README.md", "验证清单.md"]: (out / f).write_text("x", encoding="utf-8")
+        out = T / "out"; (out / "patches").mkdir(parents=True); (out / "S2-02-sql").mkdir(); (out / "S2-03-config").mkdir()
+        for f in ["README.md", "S2-07-验证清单.md"]: (out / f).write_text("x", encoding="utf-8")
         (out / "patches/svc-a.patch").write_text("x", encoding="utf-8")
         (out / "patches/svc-z.patch").write_text("x", encoding="utf-8")
-        (out / "verify").mkdir(); (out / "verify/out.txt").write_text("PASS=1", encoding="utf-8")
-        (out / "verify/cases.json").write_text('[{"ac": "AC-01"}, {"ac": "AC-02"}, {"ac": "AC-06"}]', encoding="utf-8")
-        (out / "api").mkdir()
-        (out / "api/接口文档.openapi.json").write_text(json.dumps({"openapi": "3.0.0", "paths": {"/svc/svcapi/new/_search": {}, "/svcapi/ghost": {}}}), encoding="utf-8")
-        (out / "api/冒烟.postman_collection.json").write_text(json.dumps({"item": [
+        (out / "S2-04-verify").mkdir(); (out / "S2-04-verify/out.txt").write_text("PASS=1", encoding="utf-8")
+        (out / "S2-04-verify/cases.json").write_text('[{"ac": "AC-01"}, {"ac": "AC-02"}, {"ac": "AC-06"}]', encoding="utf-8")
+        (out / "S2-05-api").mkdir()
+        (out / "S2-05-api/接口文档.openapi.json").write_text(json.dumps({"openapi": "3.0.0", "paths": {"/svc/svcapi/new/_search": {}, "/svcapi/ghost": {}}}), encoding="utf-8")
+        (out / "S2-05-api/冒烟.postman_collection.json").write_text(json.dumps({"item": [
             {"name": "登录", "request": {"url": "{{baseUrl}}/auth/login"}},
             {"name": "列表", "item": [{"name": "AC-01 列表", "request": {"url": {"raw": "{{baseUrl}}/svc/svcapi/new/_search?x=1"}}},
                                     {"name": "AC-01 反例", "request": {"url": "{{baseUrl}}/svc/svcapi/nope"}}]}]}), encoding="utf-8")
-        (out / "sql/new.sql").write_text("CREATE TABLE IF NOT EXISTS `tb_new` (\n  `id` bigint NOT NULL,\n  `apply_no` varchar(32)\n) ENGINE=InnoDB;\n", encoding="utf-8")
+        (out / "S2-02-sql/new.sql").write_text("CREATE TABLE IF NOT EXISTS `tb_new` (\n  `id` bigint NOT NULL,\n  `apply_no` varchar(32)\n) ENGINE=InnoDB;\n", encoding="utf-8")
         data_sql = "INSERT INTO tb_dict (id, code) VALUES (1, 'A');\nDELETE FROM tb_menu WHERE id = 9;\nINSERT INTO tb_menu (id) VALUES (9);\n"
-        (out / "sql/data.sql").write_text(data_sql, encoding="utf-8")
+        (out / "S2-02-sql/data.sql").write_text(data_sql, encoding="utf-8")
         big = "".join(f"INSERT INTO tb_cfg (k) SELECT 'k{i}' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM tb_cfg WHERE k = 'k{i}');\n" for i in range(8))
-        (out / "sql/big.sql").write_text(big, encoding="utf-8")
-        big_hash = hashlib.sha256((out / "sql/big.sql").read_bytes()).hexdigest()
-        (out / "上线手册.md").write_text("```sql\nCREATE TABLE IF NOT EXISTS `tb_new` (\n  `id` bigint NOT NULL,\n  `apply_no` varchar(64)\n) ENGINE=InnoDB;\n```\n"
-                                       f"```sql\n{data_sql}```\n执行 sql/big.sql sha256:{big_hash}\n"
+        (out / "S2-02-sql/big.sql").write_text(big, encoding="utf-8")
+        big_hash = hashlib.sha256((out / "S2-02-sql/big.sql").read_bytes()).hexdigest()
+        (out / "S2-06-上线手册.md").write_text("```sql\nCREATE TABLE IF NOT EXISTS `tb_new` (\n  `id` bigint NOT NULL,\n  `apply_no` varchar(64)\n) ENGINE=InnoDB;\n```\n"
+                                       f"```sql\n{data_sql}```\n执行 S2-02-sql/big.sql sha256:{big_hash}\n"
                                        "```\n  - /svcapi/new/_search\n```\n", encoding="utf-8")
-        (out / "config/a.diff").write_text("+  - /svcapi/new/_search\n+  - /svcapi/ghost/_x\n", encoding="utf-8")
+        (out / "S2-03-config/a.diff").write_text("+  - /svcapi/new/_search\n+  - /svcapi/ghost/_x\n", encoding="utf-8")
         s1 = T / "S1"; s1.mkdir()
-        (s1 / "代码走读.md").write_text("### 接触点\n| 层 | 参照 | 本需求做法（仿 / 改 / 新建） |\n|---|---|---|\n| 入口 | svc-a NewController | 新建 |\n"
+        (s1 / "S1-03-代码走读.md").write_text("### 接触点\n| 层 | 参照 | 本需求做法（仿 / 改 / 新建） |\n|---|---|---|\n| 入口 | svc-a NewController | 新建 |\n"
                                      "| 其他服务 | svc-b `a.txt` | 改：加接口 |\n| 配置 | web-a-cfg | 不改 |\n", encoding="utf-8")
-        (s1 / "设计.md").write_text("## 评审摘要\n一屏\nAC-01：a\nAC-02：b\nAC-03：c\nAC-04：d\nAC-05：e\nAC-06：f\nAC-07：g\n\n## 改动面\n| 仓 | 文件 | 改什么 | 单测 |\n|---|---|---|---|\n"
+        (s1 / "S1-07-设计.md").write_text("## 评审摘要\n一屏\nAC-01：a\nAC-02：b\nAC-03：c\nAC-04：d\nAC-05：e\nAC-06：f\nAC-07：g\n\n## 改动面\n| 仓 | 文件 | 改什么 | 单测 |\n|---|---|---|---|\n"
                                    "| svc-a | NewController | x | |\n| web-a | new.ts | x | |\n| web-a | missing.ts | x | |\n| web-b | 路由 | 加路由 | |\n"
                                    "| svc-c | | 不改：无需 | |\n"
                                    "| svc-d | OrderMapper | 修改；precheck 按无改动登记，patch 另验 | |\n"
                                    "\n## 待定决策\n| Q | 问题 | 建议值 | 按建议会怎样 | 状态 |\n|---|---|---|---|---|\n| Q-01 | q | v | 会这样 | 已定 |\n"
                                    "\n### 交付选项\n| 选项 | 建议值 | 依据 | 用户选择 |\n|---|---|---|---|\n| 环境形态 | CI | 手册 | CI |\n| 交付范围 | 仅后端 | 仓 | 仅后端 |\n", encoding="utf-8")
-        (out / "审查.md").write_text("## AC 实现映射\n| AC | 实现位置 | 结论 |\n|---|---|---|\n"
+        (out / "S2-08-审查.md").write_text("## AC 实现映射\n| AC | 实现位置 | 结论 |\n|---|---|---|\n"
                                     "| AC-01 | svc-a/src/main/java/com/x/ctl/NewController.java:3 | 已实现 |\n"
                                     "| AC-02 | src/main/java/com/x/ctl/Nope.java:9 | 已实现 |\n"
                                     "| AC-04 | 由平台承载 | 平台承载 |\n| AC-05 | 环境侧 | 环境登记 |\n| AC-06 | 页面 | 本期不做（D-01） |\n| AC-07 | 页面 | 本期不做（D-01） |\n\n## 问题\n| 编号 | 类别 | 问题 | 位置 | 状态 |\n|---|---|---|---|---|\n"
@@ -1083,11 +1083,11 @@ def selftest():
         rep3 = run(ns(no_patch=True, write_manifest=False))
         if any(c == "M1" for _, c, _ in rep3.issues): failures.append("--no-patch 不应检查 manifest")
         s1b = T / "req/S1"; s1b.mkdir(parents=True); (T / "_project").mkdir()
-        (s1b / "交互流程.md").write_text("| /x/b | 不画 |\nA->>B: GET /x/a\n", encoding="utf-8")
-        (s1b / "设计说明.md").write_text("## 接口契约\n| 方法 | 路径 | 调用者 |\n|---|---|---|\n| GET | /x/a | u |\n| POST | `/x/b?k=` | u |\n\n## 改动面\n| 仓 | 文件 |\n|---|---|\n| svc-a | x |\n", encoding="utf-8")
-        (s1b / "待定决策.md").write_text("### 交付选项\n| 选项 | 建议值 | 用户选择 |\n|---|---|---|\n| 环境形态 | CI | CI |\n"
+        (s1b / "S1-06-交互流程.md").write_text("| /x/b | 不画 |\nA->>B: GET /x/a\n", encoding="utf-8")
+        (s1b / "S1-04-设计说明.md").write_text("## 接口契约\n| 方法 | 路径 | 调用者 |\n|---|---|---|\n| GET | /x/a | u |\n| POST | `/x/b?k=` | u |\n\n## 改动面\n| 仓 | 文件 |\n|---|---|\n| svc-a | x |\n", encoding="utf-8")
+        (s1b / "S1-05-待定决策.md").write_text("### 交付选项\n| 选项 | 建议值 | 用户选择 |\n|---|---|---|\n| 环境形态 | CI | CI |\n"
                                         "| 交付范围 | 仅后端 | 仅后端 |\n| 冒烟集合 | 产出 | （待用户回复） |\n", encoding="utf-8")
-        (T / "_project/项目手册.md").write_text("## 1. 仓库地图\n", encoding="utf-8")
+        (T / "_project/S0-01-项目手册.md").write_text("## 1. 仓库地图\n", encoding="utf-8")
         rep4 = run(ns(s1=str(s1b), handoff=str(T / "ho/new")))
         d1 = [m for _, c, m in rep4.issues if c == "D1"]
         for s in ("评审摘要", "调用者/数据范围/状态前置", "按建议会怎样", "术语映射", "冒烟集合", "/x/b"):
@@ -1102,23 +1102,23 @@ def selftest():
             if f"[{c}]" not in ltext: failures.append(f"期望 lint {c} 未触发")
         if lok or "b/x.md" in ltext: failures.append("lint 结果错误")
         ks = T / "k1s1"; ks.mkdir()
-        (ks / "设计.md").write_text("类型：小改动\n", encoding="utf-8")
-        (ks / "代码走读.md").write_text("## 平台登记数据取样\n| 登记项 | 本需求要加/依赖的行 |\n|---|---|\n| 字典 | 新增一行 |\n", encoding="utf-8")
-        kr = Report(); check_type(ks, [out / "sql/new.sql"], 0, kr)
+        (ks / "S1-07-设计.md").write_text("类型：小改动\n", encoding="utf-8")
+        (ks / "S1-03-代码走读.md").write_text("## 平台登记数据取样\n| 登记项 | 本需求要加/依赖的行 |\n|---|---|\n| 字典 | 新增一行 |\n", encoding="utf-8")
+        kr = Report(); check_type(ks, [out / "S2-02-sql/new.sql"], 0, kr)
         if not any(c == "K1" and "新建表" in m for _, c, m in kr.issues): failures.append("K1 新建表未触发")
         if not any(c == "K1" and "平台登记" in m for _, c, m in kr.issues): failures.append("K1 平台登记未触发")
-        (ks / "设计.md").write_text("类型：纯配置\n", encoding="utf-8")
+        (ks / "S1-07-设计.md").write_text("类型：纯配置\n", encoding="utf-8")
         kr3 = Report(); check_type(ks, [], 2, kr3)
         if not any(c == "K1" and "代码改动" in m for _, c, m in kr3.issues): failures.append("K1 纯配置有代码未触发")
         ds = T / "d2"; ds.mkdir()
-        (ds / "决定表.md").write_text("| 编号 | 原句 | 来源 | 状态 |\n|---|---|---|---|\n| D-01 | 要做 | 原文 | 有效 |\n| D-02 | 不做 | 原文 | 作废 |\n", encoding="utf-8")
-        (ds / "需求与验收.md").write_text("| REQ | 依据 |\n|---|---|\n| REQ-01 | D-09 |\n", encoding="utf-8")
+        (ds / "S1-01-决定表.md").write_text("| 编号 | 原句 | 来源 | 状态 |\n|---|---|---|---|\n| D-01 | 要做 | 原文 | 有效 |\n| D-02 | 不做 | 原文 | 作废 |\n", encoding="utf-8")
+        (ds / "S1-02-需求与验收.md").write_text("| REQ | 依据 |\n|---|---|\n| REQ-01 | D-09 |\n", encoding="utf-8")
         dr = Report(); check_decisions(ds, dr)
         if not any(c == "D2" and "D-01" in m for _, c, m in dr.issues): failures.append("D2 有效项未触发")
         if any(c == "D2" and "D-02" in m for _, c, m in dr.issues): failures.append("作废的 D-02 不应要求验收")
-        (ds / "设计说明.md").write_text("x\n", encoding="utf-8"); (ds / "决定表.md").unlink()
+        (ds / "S1-04-设计说明.md").write_text("x\n", encoding="utf-8"); (ds / "S1-01-决定表.md").unlink()
         drb = Report(); check_decisions(ds, drb)
-        if not any(c == "D2" and "决定表.md" in m for _, c, m in drb.issues): failures.append("D2 缺决定表未触发")
+        if not any(c == "D2" and "S1-01-决定表.md" in m for _, c, m in drb.issues): failures.append("D2 缺决定表未触发")
         ing = T / "ing"
         docx = T / "sample.docx"
         png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -1176,22 +1176,22 @@ def selftest():
         if "〔图 media/b1.png〕" not in body or not (ing / "media/b1.png").exists(): failures.append("ingest 没有抽出图片")
         man0 = (ing / "清单.md").read_text(encoding="utf-8")
         if "| media/b2.png | 页眉 | 忽略 | 页眉 |" not in man0: failures.append("页眉图应标忽略")
-        s1ing = T / "s1ing"; (s1ing / "原文").mkdir(parents=True)
+        s1ing = T / "s1ing"; (s1ing / "S1-00-原文").mkdir(parents=True)
         for f in ing.iterdir():
-            target = s1ing / "原文" / f.name
+            target = s1ing / "S1-00-原文" / f.name
             if f.is_dir(): shutil.copytree(f, target, dirs_exist_ok=True)
             else: shutil.copy(f, target)
         src = Report(); check_source(s1ing, src)
         if not any(c == "X1" and "待看" in m for _, c, m in src.issues): failures.append("待看的图应被 X1 拦住")
-        man = (s1ing / "原文/清单.md").read_text(encoding="utf-8").replace("| media/b1.png | 正文 | 待看 |  |", "| media/b1.png | 正文 | 已读 |  |")
-        (s1ing / "原文/清单.md").write_text(man, encoding="utf-8")
+        man = (s1ing / "S1-00-原文/清单.md").read_text(encoding="utf-8").replace("| media/b1.png | 正文 | 待看 |  |", "| media/b1.png | 正文 | 已读 |  |")
+        (s1ing / "S1-00-原文/清单.md").write_text(man, encoding="utf-8")
         src2 = Report(); check_source(s1ing, src2)
         if any(c == "X1" for _, c, _ in src2.issues): failures.append("已读且 UTF-8 的原文不应报 X1")
-        empty = T / "emptyS1"; (empty / "原文").mkdir(parents=True)
-        (empty / "原文/正文.md").write_text("## 原型\n\n〔图 media/b1.png〕\n", encoding="utf-8")
-        (empty / "原文/media").mkdir()
-        (empty / "原文/media/b1.png").write_bytes(png)
-        (empty / "原文/清单.md").write_text("## 图片\n| 文件 | 位置 | 状态 | 原因 |\n|---|---|---|---|\n| media/b1.png | 原型 | 忽略 | 装饰 |\n", encoding="utf-8")
+        empty = T / "emptyS1"; (empty / "S1-00-原文").mkdir(parents=True)
+        (empty / "S1-00-原文/正文.md").write_text("## 原型\n\n〔图 media/b1.png〕\n", encoding="utf-8")
+        (empty / "S1-00-原文/media").mkdir()
+        (empty / "S1-00-原文/media/b1.png").write_bytes(png)
+        (empty / "S1-00-原文/清单.md").write_text("## 图片\n| 文件 | 位置 | 状态 | 原因 |\n|---|---|---|---|\n| media/b1.png | 原型 | 忽略 | 装饰 |\n", encoding="utf-8")
         er = Report(); check_source(empty, er)
         if not any(c == "X1" and "不能忽略" in m for _, c, m in er.issues): failures.append("空节旁的图被忽略时应报 X1")
         emf = T / "vec.docx"
@@ -1233,17 +1233,17 @@ def selftest():
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", help="文档目录（S2/：上线手册、验证清单、sql/、config/）")
+    ap.add_argument("--out", help="文档目录（S2/：S2-06-上线手册、S2-07-验证清单、S2-02-sql/、S2-03-config/）")
     ap.add_argument("--handoff", help="改动包目录（patches/、README、manifest）；不给且非 --no-patch 时等于 --out")
     ap.add_argument("--repo", action="append", default=[])
     ap.add_argument("--base", action="append", default=[], help="目录名=基线commit")
     ap.add_argument("--no-patch", action="store_true", help="分支/PR 形态：不要求 patches/README/manifest")
     ap.add_argument("--allow-dirty", action="store_true")
     ap.add_argument("--write-manifest", action="store_true")
-    ap.add_argument("--config", help="项目参数 JSON（建议 artifacts/_project/precheck.json）")
+    ap.add_argument("--config", help="项目参数 JSON（建议 artifacts/_project/S0-02-precheck.json）")
     ap.add_argument("--s1", help="S1 目录；默认 --out 的同级 S1/")
     ap.add_argument("--lint-sop", help="检查 sop-v2 自身：篇幅、日期、project_terms（见 SOP约束.md）")
-    ap.add_argument("--ingest", nargs="+", help="原文文件。与 --out（S1/原文目录）合用，落成 UTF-8 正文")
+    ap.add_argument("--ingest", nargs="+", help="原文文件。与 --out（S1/S1-00-原文目录）合用，落成 UTF-8 正文")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(encoding="utf-8", errors="replace")
