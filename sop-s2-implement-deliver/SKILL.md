@@ -84,7 +84,7 @@ python <本 skill 目录>/precheck.py --out S2 --repo <目录> [--repo ...] --ba
 - 在线仓：推分支、建 PR。`S2/` 即交付物。
 - 离线快照 / 不能编译：`handoff/{需求}-r{N}/`，每个改动目录一个 patch（`git format-patch <基线>..HEAD --relative=<子目录>`）。改动包只放 patch、README、manifest、precheck 报告；`S2/` 连同拷贝。r{N} 目录生成后不改，要改出 r{N+1}。
 
-### 9. 更新当前位置
+### 9. 更新当前位置：交付完成用生命周期 › 当前位置的「S3 待执行」；停下来只问一个问题时用「S2 有一个问题」。写进 `00-当前位置.md`，对话最后一条原样发给用户。
 
 ## 规则
 
