@@ -616,7 +616,7 @@ def ingest(paths, out_dir):
 
 def check_s1_shape(s1, doc, rep):
     txt = read(doc)
-    if not re.search(r'^#+.*评审摘要', txt, re.M): rep.err("D1", "S1-04-设计说明.md 缺「评审摘要」（S1 评审先发它）")
+    if not re.search(r'^#+.*评审摘要', txt, re.M): rep.err("D1", "S1-04-设计说明.md 缺「评审摘要」")
     if not any(l.lstrip().startswith("|") and all(k in l for k in ("调用者", "数据范围", "状态前置")) for l in txt.splitlines()):
         rep.err("D1", "S1-04-设计说明.md 接口契约缺 调用者/数据范围/状态前置 列")
     pend = s1 / "S1-05-待定决策.md"
@@ -652,7 +652,7 @@ def _delivery_options(text, where, rep):
 def check_slim_shape(doc, rep):
     """小改动、线上缺陷、纯配置的S1-07-设计.md：不套用新功能的接口三列，但这三项不能靠类型跳过。"""
     txt = read(doc)
-    if not re.search(r'^#+.*评审摘要', txt, re.M): rep.err("D1", "S1-07-设计.md 缺「评审摘要」（S1 评审先发它）")
+    if not re.search(r'^#+.*评审摘要', txt, re.M): rep.err("D1", "S1-07-设计.md 缺「评审摘要」")
     if "按建议会怎样" not in txt: rep.err("D1", "S1-07-设计.md 缺「按建议会怎样」列")
     _delivery_options(txt, "S1-07-设计.md", rep)
 

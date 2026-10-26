@@ -11,7 +11,7 @@ description: 按 S1 设计的改动面写代码（项目有测试基础设施时
 
 ## 输入
 
-S1 产出（评审通过）、项目手册、`artifacts/_project/S0-02-precheck.json`。
+S1 产出（改动面已确认）、项目手册、`artifacts/_project/S0-02-precheck.json`。
 
 ## 步骤
 

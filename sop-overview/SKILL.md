@@ -13,7 +13,7 @@ description: 需求交付 SOP（sop-v2）总纲：阶段 S0 项目手册 → S1 
 
 ## 该用哪个 skill
 
-建或回填手册 `sop-s0-project-handbook`；拿到需求、缺陷、配置数据变更 `sop-s1-requirement-design`；评审通过后写代码出包 `sop-s2-implement-deliver`；收到编译、用例、部署结果 `sop-s3-verify-fix`；上线完成 `sop-r-retrospective`。
+建或回填手册 `sop-s0-project-handbook`；拿到需求、缺陷、配置数据变更 `sop-s1-requirement-design`；改动面确认后写代码出包 `sop-s2-implement-deliver`；收到编译、用例、部署结果 `sop-s3-verify-fix`；上线完成 `sop-r-retrospective`。
 
 ## 开工前先读
 
