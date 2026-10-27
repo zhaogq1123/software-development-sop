@@ -20,6 +20,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   H1 交付目录文件齐全              G1 无未提交文件（--allow-dirty 降 WARN）
   H2 交付目录不留 S2-04-verify/out.txt、S2-04-verify/env.local（自测输出与凭据）
   J1 Java import 可解析            J2 实体字段 ↔ S2-02-sql/ DDL 列（跳过 @TableField(exist=false)、static）
+  J3 工作区有源码的类型：改动里的 get/set/is 成员须在源码中存在（Lombok @Data/@Getter/@Setter/@Value 按字段计）
   F1 前端 import 可解析            F2 前端请求路径 ↔ Controller 映射
   Q1 上线手册含 S2-02-sql/*.sql 原文，或「文件名 + sha256:哈希」引用
   Q2 上线手册包含 S2-03-config/*.diff 的每条改动行
@@ -41,7 +42,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   P1 改动文件路径不存在            E0 没有改动文件
   --lint-sop：L1 篇幅上限  L2 正文出现具体日期  L3 出现 project_terms
 
-已知局限：外部依赖的类只能判断「依赖大概率存在」，类名对不对由编译确认；行为、口径、时效参数不在检查范围。
+已知局限：外部依赖的类只能判断「依赖大概率存在」；工作区无源码的类型成员仍由编译确认。J3 只核工作区（含 ref_dirs）有源码的 get/set/is。行为、口径、时效参数不在检查范围。
 项目参数从 --config JSON 读，默认见 DEFAULT_CONFIG；放 artifacts/_project/S0-02-precheck.json，项目级，不按需求裁剪。
 退出码 0 PASS / 1 FAIL。
 """
@@ -59,8 +60,8 @@ DEFAULT_CONFIG = {
     "project_terms": [],
     "defer_markers": ["联调核对", "待联调", "需内网", "待核对", "待确认"],
 }
-# 与 sop-overview/SOP约束.md 一致。md 合计与 py 上限上调：原文落盘和决定表、验收覆盖、改动面文件、图清单写在本文件，精简版补评审摘要与交付选项，不另开文件。
-LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1120, "py": 1280}
+# 与 sop-overview/SOP约束.md 一致。md 合计与 py：原文落盘、决定表到验收、改动面、图清单、精简版评审与交付选项、J3 成员核写在本文件。
+LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1120, "py": 1380}
 DATE_RE = re.compile(r'\b20\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b')
 AC_RE = re.compile(r'\bAC-\d+\b')
 VERDICTS = ("已实现", "未实现", "本期不做", "环境登记")
@@ -80,6 +81,11 @@ TABLE_RE = re.compile(r'@TableName\s*\(\s*(?:value\s*=\s*)?"([^"]+)"')
 FIELD_RE = re.compile(r'((?:@\w+(?:\([^)]*\))?\s*)*)(?:private|protected)\s+((?:static\s+|final\s+)*)[\w<>\[\], ?]+\s+(\w+)\s*(?:=[^;]*)?;')
 DDL_RE = re.compile(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\((.*?)\)\s*ENGINE', re.S | re.I)
 DDL_COL_RE = re.compile(r'^\s*`(\w+)`', re.M)
+LOMBOK_RE = re.compile(r'@(?:Data|Getter|Setter|Value)\b')
+METHOD_ACC_RE = re.compile(r'(?:public|protected|private)\s+(?:static\s+)?(?:[\w.<>,?\[\]]+)\s+(get|set|is)([A-Z]\w*)\s*\(')
+TYPE_VAR_RE = re.compile(r'(?<![\w.@])([A-Z]\w*)(?:<[^>\n;]*>)?\s+(\w+)\s*(?:=|;|,|\)|:)')
+ACCESS_RE = re.compile(r'\b([a-z_]\w*)\s*\.\s*(get|set|is)([A-Z]\w*)\s*\(')
+JAVA_TYPE_KW = frozenset("class interface enum return new throw if for while switch case catch synchronized assert void".split())
 
 
 class Report:
@@ -207,6 +213,46 @@ def check_java_import(rel, name, wild, idx, src_packages, exclude, rep):
     stem = ".".join(name.split(".")[:3])
     if imported_elsewhere(idx, exclude, lambda k: k.startswith(stem + ".")): return  # 同组依赖已在用
     rep.warn("J1", f"{rel}: import {name}{'.*' if wild else ''} 无源文件，同组依赖也未见使用（新依赖？确认 pom）")
+
+
+def java_type_members(path, cache):
+    key = str(path)
+    if key in cache: return cache[key]
+    txt = read(path)
+    fields = {f for _, _, f in FIELD_RE.findall(txt)}
+    methods = {m.group(1) + m.group(2) for m in METHOD_ACC_RE.finditer(txt)}
+    cache[key] = (fields, methods, bool(LOMBOK_RE.search(txt)))
+    return cache[key]
+
+
+def resolve_java_type_path(simple, pkg, simple_to_fqcn, idx):
+    fqcn = simple_to_fqcn.get(simple) or (f"{pkg}.{simple}" if pkg else None)
+    if fqcn and fqcn in idx["fqcn"]: return idx["fqcn"][fqcn]
+    paths = idx["simple"].get(simple, set())
+    return next(iter(paths)) if len(paths) == 1 else None
+
+
+def check_java_members(rel, txt, idx, rep, cache):
+    """改动文件里对工作区有源码类型的 get/set/is，成员须真实存在。无源码的类型跳过。"""
+    pkg_m = re.search(r'^\s*package\s+([\w.]+)\s*;', txt, re.M)
+    pkg = pkg_m.group(1) if pkg_m else ""
+    simple_to_fqcn = {n.rsplit(".", 1)[-1]: n for n, w in java_imports(txt) if not w and not n.startswith(JDK_PREFIX)}
+    vars_ = {"this": Path(rel).stem}
+    for m in TYPE_VAR_RE.finditer(txt):
+        t, v = m.group(1), m.group(2)
+        if t in JAVA_TYPE_KW or v in JAVA_TYPE_KW or v[0].isupper(): continue
+        vars_[v] = t
+    for m in ACCESS_RE.finditer(txt):
+        var, kind, prop = m.group(1), m.group(2), m.group(3)
+        simple = vars_.get(var)
+        if not simple: continue
+        path = resolve_java_type_path(simple, pkg, simple_to_fqcn, idx)
+        if path is None: continue
+        fields, methods, lombok = java_type_members(path, cache)
+        if (kind + prop) in methods: continue
+        field = prop[0].lower() + prop[1:] if prop else prop
+        if lombok and field in fields: continue
+        rep.err("J3", f"{rel}: {simple}.{kind}{prop} 在工作区源码中不存在（臆造或拼错）")
 
 
 def md_table_after(text, heading_kw, header=False):
@@ -873,6 +919,7 @@ def run(a):
         changed_by_repo.append((d, files))
 
     all_changed_paths = {d / f for d, files in changed_by_repo for f in files}
+    members_cache = {}
     for d, files in changed_by_repo:
         rep.counts.setdefault(d.name, {"java": 0, "fe": 0, "other": 0})
         for rel in files:
@@ -886,6 +933,7 @@ def run(a):
                 rep.count(d.name, "java")
                 for name, wild in java_imports(txt):
                     check_java_import(rel, name, wild, idx, src_packages, all_changed_paths, rep)
+                check_java_members(rel, txt, idx, rep, members_cache)
                 for t in TABLE_RE.findall(txt):
                     if t in ddl:
                         for ann, mods, field in FIELD_RE.findall(txt):
@@ -983,6 +1031,9 @@ def selftest():
         (svc / "src/main/java/com/x/ctl").mkdir(parents=True); (svc / "src/main/java/com/x/util").mkdir(parents=True)
         (web / "src/api").mkdir(parents=True); (web / "src/libs").mkdir(parents=True); other.mkdir()
         (svc / "src/main/java/com/x/util/Helper.java").write_text("package com.x.util;\npublic class Helper {}\n", encoding="utf-8")
+        (svc / "src/main/java/com/x/ctl/OrderVo.java").write_text(
+            'package com.x.ctl;\npublic class OrderVo {\n private String name;\n'
+            ' public String getName(){return name;}\n public void setName(String n){name=n;}\n}\n', encoding="utf-8")
         (svc / "src/main/java/com/x/ctl/OldController.java").write_text(
             'package com.x.ctl;\nimport com.x.util.Helper;\nimport org.springframework.web.bind.annotation.*;\nimport cn.tool.core.util.StrUtil;\n'
             '@RequestMapping("svcapi/old")\npublic class OldController { @PostMapping("/_search") public void s(){} }\n', encoding="utf-8")
@@ -993,8 +1044,11 @@ def selftest():
         base = git(mono, "rev-parse", "HEAD")
         (svc / "src/main/java/com/x/ctl/NewController.java").write_text(
             'package com.x.ctl;\nimport com.x.util.Helper;\nimport com.x.util.NotExist;\nimport com.ext.dto.*;\n'
-            'import cn.tool.core.convert.Convert;\nimport org.springframework.web.bind.annotation.*;\n'
-            '@RestController\n@RequestMapping("svcapi/new")\npublic class NewController { @PostMapping("/_search") public void s(@RequestBody @Valid SendReq req){} }\n', encoding="utf-8")
+            'import com.ext.dto.GhostVo;\nimport cn.tool.core.convert.Convert;\nimport org.springframework.web.bind.annotation.*;\n'
+            '@RestController\n@RequestMapping("svcapi/new")\npublic class NewController {\n'
+            ' @PostMapping("/_search") public void s(@RequestBody @Valid SendReq req){\n'
+            '  OrderVo vo = new OrderVo(); vo.setName("ok"); vo.setProjectMode(1);\n'
+            '  GhostVo g = null; g.setNope(1);\n }\n}\n', encoding="utf-8")
         (svc / "src/main/java/com/x/ctl/SendReq.java").write_text(
             'package com.x.ctl;\npublic class SendReq {\n private String mobile;\n private String code;\n}\n', encoding="utf-8")
         (svc / "src/main/java/com/x/ctl/BApi.java").write_text(
@@ -1058,7 +1112,7 @@ def selftest():
         msgs = [(lv, c, m) for lv, c, m in rep.issues]
         has = lambda lv, c, s="": any(l == lv and k == c and s in m for l, k, m in msgs)
         failures = []
-        for want, s in (("J1", "NotExist"), ("J2", "wrong_field"), ("F1", "missing"), ("Q1", ""), ("Q2", "ghost")):
+        for want, s in (("J1", "NotExist"), ("J2", "wrong_field"), ("J3", "setProjectMode"), ("F1", "missing"), ("Q1", ""), ("Q2", "ghost")):
             if not has("ERROR", want, s): failures.append(f"期望 ERROR {want} 未触发")
         if not has("WARN", "N1", "ghost"): failures.append("期望 WARN N1 未触发")
         if not has("WARN", "F2", "_nope"): failures.append("期望 WARN F2 未触发")
@@ -1066,6 +1120,8 @@ def selftest():
         if not has("WARN", "J1", "com.ext.dto.*"): failures.append("外部通配导入且无同组依赖时应 WARN")
         if has("WARN", "J1", "Convert"): failures.append("同组依赖已在用（cn.tool.core）仍报 WARN")
         if any(c == "J2" and ("ghost" in m or "serialVersionUID" in m) for _, c, m in msgs): failures.append("exist=false / static 字段未被排除")
+        if any(c == "J3" and "setName" in m for _, c, m in msgs): failures.append("真实成员 setName 被误报")
+        if any(c == "J3" and "setNope" in m for _, c, m in msgs): failures.append("无源码类型成员不应报 J3")
         if any(c == "F2" and m.endswith("/svc/svcapi/new 在 Controller 映射中未找到") for _, c, m in msgs): failures.append("前缀常量被当成请求路径")
         if any(c == "Q2" and "_search" in m for _, c, m in msgs): failures.append("手册已含的配置行被误报")
         for want, s in (("Q3", "tb_dict"), ("T1", "mode.ts"), ("A1", "/svcapi/ghost"), ("A1", "/svc/svcapi/nope"), ("A1", "AC-02"), ("C1", "web-b"), ("C1", "svc-d"), ("C1", "missing.ts"), ("R1", "AC-03"), ("R1", "Nope.java"), ("R1", "P-01"), ("R1", "AC-04"),
@@ -1226,7 +1282,7 @@ def selftest():
         print(text); print("---")
         if failures:
             print("SELFTEST FAIL"); [print(" -", f) for f in failures]; return 1
-        print("SELFTEST PASS（J1 J2 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
+        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
     finally:
         shutil.rmtree(T, ignore_errors=True)
 

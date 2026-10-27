@@ -28,9 +28,9 @@ python sop-s2-implement-deliver/precheck.py --lint-sop <sop-v2 目录> --config 
 | 每个 `SKILL.md` | 120 行 |
 | 其他 `.md`（总纲、模板） | 200 行 |
 | 全部 `.md` 合计（不含 README） | 1120 行 |
-| `precheck.py` | 1280 行 |
+| `precheck.py` | 1380 行 |
 
-md 合计与 `precheck.py` 上限上调，是因为原文落盘、图清单、决定表到验收、改动面到文件写在 `precheck.py`，精简版补了评审摘要与交付选项。不另开文件。
+md 合计与 `precheck.py` 上限上调，是因为原文落盘、图清单、决定表到验收、改动面到文件、以及 J3（工作区内类型成员）写在 `precheck.py`，精简版补了评审摘要与交付选项。不另开文件。
 
 超限 lint 即 FAIL。超了只能删或合并，不能拆新文件绕过。上限本身要改，同时改 `precheck.py` 的 `LINT_LIMITS` 并写明理由。
 
