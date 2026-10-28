@@ -72,7 +72,7 @@ artifacts/
       S2-06-上线手册.md
       S2-07-验证清单.md
       S2-08-审查.md
-    handoff/{需求编号}-r1/ …      S2-09 改动包；仅离线快照 / 本机不可编译
+    handoff/{需求编号}-r{N}/     S2-09 当前终包；旧轮在 handoff/_archived/
     S3/
       S3-01-结果-r1.md …
       S3-02-处理记录.md
