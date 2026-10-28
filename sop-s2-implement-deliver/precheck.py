@@ -60,8 +60,8 @@ DEFAULT_CONFIG = {
     "project_terms": [],
     "defer_markers": ["联调核对", "待联调", "需内网", "待核对", "待确认"],
 }
-# 与 sop-overview/SOP约束.md 一致。md 合计与 py：原文落盘、决定表到验收、改动面、图清单、精简版评审与交付选项、J3 成员核写在本文件。
-LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1120, "py": 1380}
+# 与 sop-overview/SOP约束.md 一致。md 合计含 S3 用户动作清单与多轮选择；py 含 J3 与原文落盘等。
+LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1160, "py": 1380}
 DATE_RE = re.compile(r'\b20\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b')
 AC_RE = re.compile(r'\bAC-\d+\b')
 VERDICTS = ("已实现", "未实现", "本期不做", "环境登记")
