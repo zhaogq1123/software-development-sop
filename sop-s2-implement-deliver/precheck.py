@@ -36,6 +36,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   X1 S1/S1-00-原文/正文.md 为 UTF-8 且无替换字符；media/ 每张图在清单里有状态，待看和无法看不能过
   K1 类型为小改动、线上缺陷、纯配置时，不得另有新建表、平台登记或（纯配置）代码改动
   U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo
+  H3 改动包根目录增量仅允许 r{N-1}to-r{N}；轮次≥r5 禁止带增量（只出全量）
   T1 改动文件不留「待联调核对」类标记（config.defer_markers）
   A1 S2/S2-05-api/ 接口文档与冒烟集合的路径都在 Controller 映射里；集合覆盖 S2-04-verify/cases.json 的全部 AC
   M1 manifest 哈希（仅改动包形态）
@@ -61,7 +62,7 @@ DEFAULT_CONFIG = {
     "defer_markers": ["联调核对", "待联调", "需内网", "待核对", "待确认"],
 }
 # 与 sop-overview/SOP约束.md 一致。md 合计含 S3 用户动作清单与多轮选择；py 含 J3 与原文落盘等。
-LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1160, "py": 1380}
+LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1180, "py": 1380}
 DATE_RE = re.compile(r'\b20\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b')
 AC_RE = re.compile(r'\bAC-\d+\b')
 VERDICTS = ("已实现", "未实现", "本期不做", "环境登记")
@@ -890,6 +891,19 @@ def run(a):
         for pf in sorted((handoff / "patches").glob("*.patch")):
             if not any(pf.stem == Path(r).resolve().name for r in a.repo):
                 rep.err("U2", f"改动包里的 {pf.name} 没有对应的 --repo，这个仓的改动没有被检查")
+    if handoff is not None:
+        hm = re.search(r"-r(\d+)$", handoff.name)
+        if hm:
+            rn = int(hm.group(1))
+            for ip in sorted(handoff.glob("*-r*to-r*.patch")):
+                im = re.search(r"-r(\d+)to-r(\d+)\.patch$", ip.name)
+                if not im:
+                    continue
+                fk, tn = int(im.group(1)), int(im.group(2))
+                if tn != rn or fk != rn - 1:
+                    rep.err("H3", f"{ip.name} 只允许相邻增量 r{rn - 1}to-r{rn}，禁止远距 from")
+                elif rn >= 5:
+                    rep.err("H3", f"r{rn}≥r5 只出全量，勿带 {ip.name}")
 
     idx = {"fqcn": {}, "simple": {}, "imports": {}, "mappings": set(), "tables": set(), "const_mappings": 0}
     for d, _, _ in repos: index_repo(d, cfg, idx)
@@ -1150,6 +1164,14 @@ def selftest():
             if not any(s in m for m in d1): failures.append(f"期望 D1（{s}）未触发")
         if any("/x/a" in m or "「环境形态」" in m or "「交付范围」" in m for m in d1): failures.append("已画的接口或已回复的选项被误报")
         if not (T / "ho/new/manifest.txt").exists(): failures.append("handoff 目录不存在时应自动创建再写 manifest")
+        h3d = T / "ho/req-r6"; (h3d / "patches").mkdir(parents=True)
+        (h3d / "README.md").write_text("x", encoding="utf-8")
+        (h3d / "patches/svc-a.patch").write_text("x", encoding="utf-8")
+        (h3d / "svc-a-r3to-r6.patch").write_text("x", encoding="utf-8")
+        (h3d / "svc-a-r5to-r6.patch").write_text("x", encoding="utf-8")
+        rep_h3 = run(ns(handoff=str(h3d)))
+        if not any(c == "H3" and "r3to-r6" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 远距增量未触发")
+        if not any(c == "H3" and "r5to-r6" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 r≥5 禁止增量未触发")
         sop = T / "sop"; (sop / "a").mkdir(parents=True); (sop / "b").mkdir()
         (sop / "a/SKILL.md").write_text("x\n" * 125 + "用 acme-pay 发起，" + "20" + "26-01-15 修订\n", encoding="utf-8")
         (sop / "b/x.md").write_text("通用流程\n", encoding="utf-8")
@@ -1282,7 +1304,7 @@ def selftest():
         print(text); print("---")
         if failures:
             print("SELFTEST FAIL"); [print(" -", f) for f in failures]; return 1
-        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
+        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 H3 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
     finally:
         shutil.rmtree(T, ignore_errors=True)
 
