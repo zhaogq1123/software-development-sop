@@ -37,6 +37,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   K1 类型为小改动、线上缺陷、纯配置时，不得另有新建表、平台登记或（纯配置）代码改动
   U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo
   H3 改动包根目录增量仅允许 r{N-1}to-r{N}；轮次≥r5 禁止带增量（只出全量）
+  H4 改动包 README 门禁表含「交付可用性」
   T1 改动文件不留「待联调核对」类标记（config.defer_markers）
   A1 S2/S2-05-api/ 接口文档与冒烟集合的路径都在 Controller 映射里；集合覆盖 S2-04-verify/cases.json 的全部 AC
   M1 manifest 哈希（仅改动包形态）
@@ -904,6 +905,9 @@ def run(a):
                     rep.err("H3", f"{ip.name} 只允许相邻增量 r{rn - 1}to-r{rn}，禁止远距 from")
                 elif rn >= 5:
                     rep.err("H3", f"r{rn}≥r5 只出全量，勿带 {ip.name}")
+        readme = handoff / "README.md"
+        if readme.exists() and "交付可用性" not in read(readme):
+            rep.err("H4", "改动包 README 门禁表缺「交付可用性」（生命周期 › 交付可用性）")
 
     idx = {"fqcn": {}, "simple": {}, "imports": {}, "mappings": set(), "tables": set(), "const_mappings": 0}
     for d, _, _ in repos: index_repo(d, cfg, idx)
@@ -1082,7 +1086,8 @@ def selftest():
         (web / "src/api/mode.ts").write_text("// 项目模式映射需内网联调核对\nexport const M = '1';\n", encoding="utf-8")
         g("add", "-A"); g("commit", "-qm", "feat")
         out = T / "out"; (out / "patches").mkdir(parents=True); (out / "S2-02-sql").mkdir(); (out / "S2-03-config").mkdir()
-        for f in ["README.md", "S2-07-验证清单.md"]: (out / f).write_text("x", encoding="utf-8")
+        (out / "README.md").write_text("| 交付可用性 | 通过 |\n", encoding="utf-8")
+        (out / "S2-07-验证清单.md").write_text("x", encoding="utf-8")
         (out / "patches/svc-a.patch").write_text("x", encoding="utf-8")
         (out / "patches/svc-z.patch").write_text("x", encoding="utf-8")
         (out / "S2-04-verify").mkdir(); (out / "S2-04-verify/out.txt").write_text("PASS=1", encoding="utf-8")
@@ -1172,6 +1177,7 @@ def selftest():
         rep_h3 = run(ns(handoff=str(h3d)))
         if not any(c == "H3" and "r3to-r6" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 远距增量未触发")
         if not any(c == "H3" and "r5to-r6" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 r≥5 禁止增量未触发")
+        if not any(c == "H4" for _, c, _ in rep_h3.issues): failures.append("期望 H4 缺交付可用性未触发")
         sop = T / "sop"; (sop / "a").mkdir(parents=True); (sop / "b").mkdir()
         (sop / "a/SKILL.md").write_text("x\n" * 125 + "用 acme-pay 发起，" + "20" + "26-01-15 修订\n", encoding="utf-8")
         (sop / "b/x.md").write_text("通用流程\n", encoding="utf-8")
@@ -1304,7 +1310,7 @@ def selftest():
         print(text); print("---")
         if failures:
             print("SELFTEST FAIL"); [print(" -", f) for f in failures]; return 1
-        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 H3 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
+        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 H3 H4 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
     finally:
         shutil.rmtree(T, ignore_errors=True)
 
