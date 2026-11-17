@@ -30,7 +30,7 @@ python sop-s2-implement-deliver/precheck.py --lint-sop <sop-v2 目录> --config 
 | 全部 `.md` 合计（不含 README） | 1180 行 |
 | `precheck.py` | 1380 行 |
 
-md 合计上调：含交付可用性（A 门禁 + B 处理记录）与多轮 patch 收敛。`precheck.py` 上限含 J3、H3、H4 及原文落盘等。不另开文件。
+md 合计上调：含交付可用性、终包白名单与多轮 patch 收敛。`precheck.py` 上限含 J3、H3、H4、H5 及原文落盘等。不另开文件。
 
 超限 lint 即 FAIL。超了只能删或合并，不能拆新文件绕过。上限本身要改，同时改 `precheck.py` 的 `LINT_LIMITS` 并写明理由。
 

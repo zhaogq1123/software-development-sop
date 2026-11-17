@@ -38,6 +38,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo
   H3 改动包根目录增量仅允许 r{N-1}to-r{N}；轮次≥r5 禁止带增量（只出全量）
   H4 改动包 README 门禁表含「交付可用性」
+  H5 终包白名单：无嵌套 S2/；根目录仅 README/manifest/precheck-report/合法相邻增量
   T1 改动文件不留「待联调核对」类标记（config.defer_markers）
   A1 S2/S2-05-api/ 接口文档与冒烟集合的路径都在 Controller 映射里；集合覆盖 S2-04-verify/cases.json 的全部 AC
   M1 manifest 哈希（仅改动包形态）
@@ -908,6 +909,18 @@ def run(a):
         readme = handoff / "README.md"
         if readme.exists() and "交付可用性" not in read(readme):
             rep.err("H4", "改动包 README 门禁表缺「交付可用性」（生命周期 › 交付可用性）")
+        # 仅独立终包（与 --out 分离，或目录名 *-r{N}）做白名单；handoff==out 的旧合并布局不套 H5
+        if handoff.is_dir() and (handoff.resolve() != out.resolve() or re.search(r"-r\d+$", handoff.name)):
+            if (handoff / "S2").exists():
+                rep.err("H5", "改动包内不得有 S2/（与 artifacts/.../S2/ 并列交付，禁止嵌套）")
+            allow_root = {"README.md", "manifest.txt", "precheck-report.txt"}
+            for p in sorted(handoff.iterdir()):
+                if p.name == "patches" and p.is_dir():
+                    continue
+                if p.is_dir():
+                    rep.err("H5", f"改动包内禁止目录 {p.name}/")
+                elif p.is_file() and p.name not in allow_root and not re.search(r"-r\d+to-r\d+\.patch$", p.name):
+                    rep.err("H5", f"改动包根目录多余文件 {p.name}（仅白名单+相邻增量）")
 
     idx = {"fqcn": {}, "simple": {}, "imports": {}, "mappings": set(), "tables": set(), "const_mappings": 0}
     for d, _, _ in repos: index_repo(d, cfg, idx)
@@ -1178,6 +1191,11 @@ def selftest():
         if not any(c == "H3" and "r3to-r6" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 远距增量未触发")
         if not any(c == "H3" and "r5to-r6" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 r≥5 禁止增量未触发")
         if not any(c == "H4" for _, c, _ in rep_h3.issues): failures.append("期望 H4 缺交付可用性未触发")
+        (h3d / "S2").mkdir(exist_ok=True)
+        (h3d / "extra.txt").write_text("x", encoding="utf-8")
+        rep_h5 = run(ns(handoff=str(h3d)))
+        if not any(c == "H5" and "S2" in m for _, c, m in rep_h5.issues): failures.append("期望 H5 嵌套 S2 未触发")
+        if not any(c == "H5" and "extra.txt" in m for _, c, m in rep_h5.issues): failures.append("期望 H5 多余文件未触发")
         sop = T / "sop"; (sop / "a").mkdir(parents=True); (sop / "b").mkdir()
         (sop / "a/SKILL.md").write_text("x\n" * 125 + "用 acme-pay 发起，" + "20" + "26-01-15 修订\n", encoding="utf-8")
         (sop / "b/x.md").write_text("通用流程\n", encoding="utf-8")
@@ -1310,7 +1328,7 @@ def selftest():
         print(text); print("---")
         if failures:
             print("SELFTEST FAIL"); [print(" -", f) for f in failures]; return 1
-        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 H3 H4 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
+        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 H3 H4 H5 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
     finally:
         shutil.rmtree(T, ignore_errors=True)
 
