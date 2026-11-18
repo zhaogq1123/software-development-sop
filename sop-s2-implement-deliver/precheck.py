@@ -36,7 +36,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   X1 S1/S1-00-原文/正文.md 为 UTF-8 且无替换字符；media/ 每张图在清单里有状态，待看和无法看不能过
   K1 类型为小改动、线上缺陷、纯配置时，不得另有新建表、平台登记或（纯配置）代码改动
   U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo
-  H3 改动包根目录增量仅允许 r{N-1}to-r{N}；轮次≥r5 禁止带增量（只出全量）
+  H3 改动包根目录增量仅允许 r{N-1}to-r{N}（任意轮次；禁止远距 from）
   H4 改动包 README 门禁表含「交付可用性」
   H5 终包白名单：无嵌套 S2/；根目录仅 README/manifest/precheck-report/合法相邻增量
   T1 改动文件不留「待联调核对」类标记（config.defer_markers）
@@ -904,8 +904,6 @@ def run(a):
                 fk, tn = int(im.group(1)), int(im.group(2))
                 if tn != rn or fk != rn - 1:
                     rep.err("H3", f"{ip.name} 只允许相邻增量 r{rn - 1}to-r{rn}，禁止远距 from")
-                elif rn >= 5:
-                    rep.err("H3", f"r{rn}≥r5 只出全量，勿带 {ip.name}")
         readme = handoff / "README.md"
         if readme.exists() and "交付可用性" not in read(readme):
             rep.err("H4", "改动包 README 门禁表缺「交付可用性」（生命周期 › 交付可用性）")
@@ -1188,8 +1186,8 @@ def selftest():
         (h3d / "svc-a-r3to-r6.patch").write_text("x", encoding="utf-8")
         (h3d / "svc-a-r5to-r6.patch").write_text("x", encoding="utf-8")
         rep_h3 = run(ns(handoff=str(h3d)))
-        if not any(c == "H3" and "r3to-r6" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 远距增量未触发")
-        if not any(c == "H3" and "r5to-r6" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 r≥5 禁止增量未触发")
+        if not any(c == "H3" and "svc-a-r3to-r6.patch" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 远距增量未触发")
+        if any(c == "H3" and "svc-a-r5to-r6.patch" in m for _, c, m in rep_h3.issues): failures.append("相邻增量 r5to-r6 不应报 H3")
         if not any(c == "H4" for _, c, _ in rep_h3.issues): failures.append("期望 H4 缺交付可用性未触发")
         (h3d / "S2").mkdir(exist_ok=True)
         (h3d / "extra.txt").write_text("x", encoding="utf-8")
