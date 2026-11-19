@@ -39,6 +39,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   H3 改动包根目录增量仅允许 r{N-1}to-r{N}（任意轮次；禁止远距 from）
   H4 改动包 README 门禁表含「交付可用性」
   H5 终包白名单：无嵌套 S2/；根目录仅 README/manifest/precheck-report/合法相邻增量
+  H6 改动包 README 内容预算：≤80 行；除 r{N}/r{N-1} 外不罗列≥2 个更早轮号
   T1 改动文件不留「待联调核对」类标记（config.defer_markers）
   A1 S2/S2-05-api/ 接口文档与冒烟集合的路径都在 Controller 映射里；集合覆盖 S2-04-verify/cases.json 的全部 AC
   M1 manifest 哈希（仅改动包形态）
@@ -905,8 +906,16 @@ def run(a):
                 if tn != rn or fk != rn - 1:
                     rep.err("H3", f"{ip.name} 只允许相邻增量 r{rn - 1}to-r{rn}，禁止远距 from")
         readme = handoff / "README.md"
-        if readme.exists() and "交付可用性" not in read(readme):
+        rtext = read(readme) if readme.exists() else ""
+        if readme.exists() and "交付可用性" not in rtext:
             rep.err("H4", "改动包 README 门禁表缺「交付可用性」（生命周期 › 交付可用性）")
+        if hm and rtext:
+            nlines = len(rtext.splitlines())
+            if nlines > 80:
+                rep.err("H6", f"改动包 README {nlines} 行，上限 80（产出模板内容预算）")
+            older = {int(x) for x in re.findall(r"(?<![A-Za-z0-9])r(\d+)(?![A-Za-z0-9])", rtext) if int(x) < rn - 1}
+            if len(older) >= 2:
+                rep.err("H6", f"README 罗列更早轮号 {sorted(older)}，历史放 _archived/S3-02")
         # 仅独立终包（与 --out 分离，或目录名 *-r{N}）做白名单；handoff==out 的旧合并布局不套 H5
         if handoff.is_dir() and (handoff.resolve() != out.resolve() or re.search(r"-r\d+$", handoff.name)):
             if (handoff / "S2").exists():
@@ -1189,6 +1198,10 @@ def selftest():
         if not any(c == "H3" and "svc-a-r3to-r6.patch" in m for _, c, m in rep_h3.issues): failures.append("期望 H3 远距增量未触发")
         if any(c == "H3" and "svc-a-r5to-r6.patch" in m for _, c, m in rep_h3.issues): failures.append("相邻增量 r5to-r6 不应报 H3")
         if not any(c == "H4" for _, c, _ in rep_h3.issues): failures.append("期望 H4 缺交付可用性未触发")
+        (h3d / "README.md").write_text("| 交付可用性 | 通过 |\n" + "\n".join(f"r{i} 说明" for i in range(1, 6)) + "\n" * 80, encoding="utf-8")
+        rep_h6 = run(ns(handoff=str(h3d)))
+        if not any(c == "H6" and "上限 80" in m for _, c, m in rep_h6.issues): failures.append("期望 H6 行数超限未触发")
+        if not any(c == "H6" and "更早轮号" in m for _, c, m in rep_h6.issues): failures.append("期望 H6 更早轮号未触发")
         (h3d / "S2").mkdir(exist_ok=True)
         (h3d / "extra.txt").write_text("x", encoding="utf-8")
         rep_h5 = run(ns(handoff=str(h3d)))
@@ -1326,7 +1339,7 @@ def selftest():
         print(text); print("---")
         if failures:
             print("SELFTEST FAIL"); [print(" -", f) for f in failures]; return 1
-        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 H3 H4 H5 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
+        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 H3 H4 H5 H6 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
     finally:
         shutil.rmtree(T, ignore_errors=True)
 
