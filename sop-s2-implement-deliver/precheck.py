@@ -39,7 +39,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   H3 改动包根目录增量仅允许 r{N-1}to-r{N}（任意轮次；禁止远距 from）
   H4 改动包 README 门禁表含「交付可用性」
   H5 终包白名单：无嵌套 S2/；根目录仅 README/manifest/precheck-report/合法相邻增量
-  H6 改动包 README 内容预算：≤80 行；除 r{N}/r{N-1} 外不罗列≥2 个更早轮号
+  H6 改动包 README 内容预算：≤80 行；除 r{N}/r{N-1} 外不罗列≥2 个更早轮号；「你要做的」≤35 行/前置≤2/本轮≤6/每步≤120 字/禁嵌套
   T1 改动文件不留「待联调核对」类标记（config.defer_markers）
   A1 S2/S2-05-api/ 接口文档与冒烟集合的路径都在 Controller 映射里；集合覆盖 S2-04-verify/cases.json 的全部 AC
   M1 manifest 哈希（仅改动包形态）
@@ -65,7 +65,7 @@ DEFAULT_CONFIG = {
     "defer_markers": ["联调核对", "待联调", "需内网", "待核对", "待确认"],
 }
 # 与 sop-overview/SOP约束.md 一致。md 合计含 S3 用户动作清单与多轮选择；py 含 J3 与原文落盘等。
-LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1180, "py": 1380}
+LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1200, "py": 1420}
 DATE_RE = re.compile(r'\b20\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b')
 AC_RE = re.compile(r'\bAC-\d+\b')
 VERDICTS = ("已实现", "未实现", "本期不做", "环境登记")
@@ -916,6 +916,24 @@ def run(a):
             older = {int(x) for x in re.findall(r"(?<![A-Za-z0-9])r(\d+)(?![A-Za-z0-9])", rtext) if int(x) < rn - 1}
             if len(older) >= 2:
                 rep.err("H6", f"README 罗列更早轮号 {sorted(older)}，历史放 _archived/S3-02")
+            m_todo = re.search(r"你要做的[^\n]*\n(.*?)(?=\n## |\Z)", rtext, re.S)
+            if m_todo:
+                tlines = m_todo.group(1).splitlines()
+                if len(tlines) > 35:
+                    rep.err("H6", f"「你要做的」{len(tlines)} 行，上限 35（短清单）")
+                if any(re.match(r"[ \t]+(- |\d+\.)", ln) for ln in tlines):
+                    rep.err("H6", "「你要做的」禁嵌套子列表（每步一行）")
+                for ln in tlines:
+                    s = ln.strip()
+                    if re.match(r"^\d+\.", s) and len(s) > 120:
+                        rep.err("H6", f"「你要做的」单步超过 120 字：{s[:40]}…")
+                        break
+                parts = re.split(r"(?m)^(前置|本轮操作|仍待你回报)", m_todo.group(1))
+                sec = {parts[i]: parts[i + 1] for i in range(1, len(parts), 2)}
+                if "前置" in sec and len(re.findall(r"(?m)^\d+\.", sec["前置"])) > 2:
+                    rep.err("H6", "「你要做的」前置超过 2 步")
+                if "本轮操作" in sec and len(re.findall(r"(?m)^\d+\.", sec["本轮操作"])) > 6:
+                    rep.err("H6", "「你要做的」本轮操作超过 6 步")
         # 仅独立终包（与 --out 分离，或目录名 *-r{N}）做白名单；handoff==out 的旧合并布局不套 H5
         if handoff.is_dir() and (handoff.resolve() != out.resolve() or re.search(r"-r\d+$", handoff.name)):
             if (handoff / "S2").exists():
@@ -1202,6 +1220,13 @@ def selftest():
         rep_h6 = run(ns(handoff=str(h3d)))
         if not any(c == "H6" and "上限 80" in m for _, c, m in rep_h6.issues): failures.append("期望 H6 行数超限未触发")
         if not any(c == "H6" and "更早轮号" in m for _, c, m in rep_h6.issues): failures.append("期望 H6 更早轮号未触发")
+        long_step = "1. " + "字" * 118
+        todo_fat = "你要做的（目录：x）\n" + "\n".join(f"行{i}" for i in range(36)) + f"\n本轮操作：\n{long_step}\n  - 嵌套\n## 门禁\n| 交付可用性 | 通过 |\n"
+        (h3d / "README.md").write_text(todo_fat, encoding="utf-8")
+        rep_h6b = run(ns(handoff=str(h3d)))
+        if not any(c == "H6" and "上限 35" in m for _, c, m in rep_h6b.issues): failures.append("期望 H6 你要做的行数未触发")
+        if not any(c == "H6" and "120 字" in m for _, c, m in rep_h6b.issues): failures.append("期望 H6 单步超长未触发")
+        if not any(c == "H6" and "嵌套" in m for _, c, m in rep_h6b.issues): failures.append("期望 H6 嵌套子列表未触发")
         (h3d / "S2").mkdir(exist_ok=True)
         (h3d / "extra.txt").write_text("x", encoding="utf-8")
         rep_h5 = run(ns(handoff=str(h3d)))
