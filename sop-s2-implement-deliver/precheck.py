@@ -31,8 +31,8 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   C1 S1「改动面」列出的每个仓、以及带扩展名的文件都有改动       C2 代码走读「接触点」里要改/新建的仓都在改动面
   D1 新功能 S1 产物结构（评审摘要、接口调用者/数据范围/状态前置、按建议会怎样、手册术语映射）；精简版S1-07-设计.md 同样要有评审摘要、按建议会怎样、交付选项
   D2 决定表里状态为有效的 D-xx 必须出现在验收里；有设计说明就得有决定表
-  R1 S2-08-审查.md：AC 全覆盖、结论用规定词、引用位置存在、环境登记的节名在上线手册里、阻塞类问题无「待修」
-  V1 审查结论为已实现或环境登记的 AC 必须写进验证清单
+  R1 S2-08-审查.md：AC 全覆盖、结论用规定词、引用位置存在、环境登记的节名在上线手册里、阻塞类问题无「待修」、文内含「审查会话：新会话」
+  V1 审查结论为已实现或环境登记的 AC 必须写进验证清单；改动面含页面文件时清单须有浏览器操作
   X1 S1/S1-00-原文/正文.md 为 UTF-8 且无替换字符；media/ 每张图在清单里有状态，待看和无法看不能过
   K1 类型为小改动、线上缺陷、纯配置时，不得另有新建表、平台登记或（纯配置）代码改动
   U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo
@@ -260,19 +260,21 @@ def check_java_members(rel, txt, idx, rep, cache):
 
 
 def md_table_after(text, heading_kw, header=False):
-    """标题含 heading_kw 的小节里第一张表的数据行（header=True 时含表头）；无该小节返回 None。"""
+    """含 heading_kw 且本节有表的第一处（header=True 含表头）。标题只提到、本节无表则看下一处。都没有返回 None。"""
     lines = text.splitlines()
-    start = next((i for i, l in enumerate(lines) if l.lstrip().startswith("#") and heading_kw in l), None)
-    if start is None: return None
-    rows = []
-    for l in lines[start + 1:]:
-        s = l.strip()
-        if s.startswith("#"): break
-        if s.startswith("|"):
-            cells = [c.strip() for c in s.strip("|").split("|")]
-            if not all(re.fullmatch(r':?-{2,}:?', c) or not c for c in cells): rows.append(cells)
-        elif rows and s: break
-    return rows if header else rows[1:]
+    starts = [i for i, l in enumerate(lines) if l.lstrip().startswith("#") and heading_kw in l]
+    if not starts: return None
+    for start in starts:
+        rows = []
+        for l in lines[start + 1:]:
+            s = l.strip()
+            if s.startswith("#"): break
+            if s.startswith("|"):
+                cells = [c.strip() for c in s.strip("|").split("|")]
+                if not all(re.fullmatch(r':?-{2,}:?', c) or not c for c in cells): rows.append(cells)
+            elif rows and s: break
+        if rows: return rows if header else rows[1:]
+    return []
 
 
 def check_sql_reentrant(sf, rep):
@@ -790,6 +792,8 @@ def check_review(s1, out, repo_dirs, cfg, rep):
     review = out / "S2-08-审查.md"
     if not review.exists(): rep.err("R1", "缺 S2/S2-08-审查.md（独立审查未做）"); return
     rtxt = read(review)
+    if "审查会话：新会话" not in rtxt:
+        rep.err("R1", "S2-08-审查.md 缺「审查会话：新会话」（实现会话不得自己填结论）")
     table = md_table_after(rtxt, "AC 实现映射", header=True) or [[]]
     col = next((i for i, h in enumerate(table[0]) if "结论" in h), -1)
     cj = out / "S2-04-verify" / "cases.json"
@@ -823,6 +827,10 @@ def check_review(s1, out, repo_dirs, cfg, rep):
         verdict = cells[col] if -len(cells) <= col < len(cells) else ""
         if verdict.startswith(("已实现", "环境登记")) and ac not in checklist:
             rep.err("V1", f"{ac} 审查结论是已实现或环境登记，S2-07-验证清单.md 没有这条。清单全过盖不住没列入的验收")
+    doc = next((s1 / f for f in ("S1-04-设计说明.md", "S1-07-设计.md") if (s1 / f).exists()), None)
+    plan = "\n".join(" ".join(c) for c in (md_table_after(read(doc), "改动面") or [])) if doc else ""
+    if re.search(r"\.(vue|html|htm|jsx|tsx|jsp)\b", plan, re.I) and "浏览器" not in checklist:
+        rep.err("V1", "改动面含页面文件，验证清单须有浏览器操作（只读代码不算该条通过）")
     files = walk_files(repo_dirs, cfg)
     for path, line in sorted(set(LOC_RE.findall(rtxt))):
         tail = "/" + path.replace("\\", "/").lstrip("./")
@@ -1182,7 +1190,7 @@ def selftest():
         if any(c == "F2" and m.endswith("/svc/svcapi/new 在 Controller 映射中未找到") for _, c, m in msgs): failures.append("前缀常量被当成请求路径")
         if any(c == "Q2" and "_search" in m for _, c, m in msgs): failures.append("手册已含的配置行被误报")
         for want, s in (("Q3", "tb_dict"), ("T1", "mode.ts"), ("A1", "/svcapi/ghost"), ("A1", "/svc/svcapi/nope"), ("A1", "AC-02"), ("C1", "web-b"), ("C1", "svc-d"), ("C1", "missing.ts"), ("R1", "AC-03"), ("R1", "Nope.java"), ("R1", "P-01"), ("R1", "AC-04"),
-                        ("R1", "AC-05"), ("R1", "AC-06"), ("C2", "svc-b"), ("U2", "svc-z"), ("H2", "out.txt"), ("V1", "AC-01"), ("X1", "正文.md")):
+                        ("R1", "AC-05"), ("R1", "AC-06"), ("R1", "审查会话"), ("C2", "svc-b"), ("U2", "svc-z"), ("H2", "out.txt"), ("V1", "AC-01"), ("X1", "正文.md")):
             if not has("ERROR", want, s): failures.append(f"期望 ERROR {want}（{s}）未触发")
         for c, s in (("Q3", "tb_menu"), ("Q1", "big.sql"), ("C1", "svc-a"), ("C1", "svc-c"), ("C1", "new.ts"), ("R1", "AC-01"), ("R1", "AC-07"), ("R1", "P-02"), ("N2", "/inner/b/ok"),
                      ("C2", "svc-a"), ("C2", "web-a"), ("U2", "svc-a"), ("D1", ""), ("A1", "_search"), ("A1", "login"), ("A1", "AC-01,"), ("V1", "AC-07")):
@@ -1361,6 +1369,13 @@ def selftest():
         if bcode == 0 or (bout / "正文.md").exists(): failures.append("整份无文本层不应写出正文.md")
         bman = (bout / "清单.md").read_text(encoding="utf-8") if (bout / "清单.md").exists() else ""
         if "整份无文本层" not in bman: failures.append("整份无文本层应记入清单，不能当成已落盘原文")
+        pv = T / "pvs1"; pv.mkdir()
+        (pv / "S1-07-设计.md").write_text("## 改动面\n| 仓 | 文件 |\n|---|---|\n| web | a.vue |\n", encoding="utf-8")
+        pr = Report(); check_review(pv, out, [], DEFAULT_CONFIG, pr)
+        if not any(c == "V1" and "浏览器" in m for _, c, m in pr.issues): failures.append("页面改动缺浏览器验证应报 V1")
+        buried = "### 评审摘要（一屏，不代替改动面）\n无表\n### 7. 改动面\n| 仓 | 文件 |\n|---|---|\n| web | b.vue |\n"
+        hit = md_table_after(buried, "改动面")
+        if not hit or "b.vue" not in hit[0]: failures.append("标题只提到改动面时仍应读到后面的表")
         print(text); print("---")
         if failures:
             print("SELFTEST FAIL"); [print(" -", f) for f in failures]; return 1
