@@ -6,7 +6,7 @@
 python sop-s2-implement-deliver/precheck.py --lint-sop <sop-v2 目录> --config artifacts/_project/S0-02-precheck.json
 ```
 
-末行 `RESULT: PASS` 才算改完。
+末行 `RESULT: PASS` 才算改完。改了 `precheck.py` 或 `pack.py` 另跑各自的 `--selftest`。
 
 ## 1. 只写通用流程
 
@@ -14,7 +14,7 @@ python sop-s2-implement-deliver/precheck.py --lint-sop <sop-v2 目录> --config 
 |----|--------|------|---------|
 | skill | 步骤、出口、门禁、问题分类、模板骨架、precheck 检查逻辑 | `sop-v2/sop-*` | 不改 |
 | 项目手册 | 仓库地图、共享边界、公共机制、术语映射、参照功能、平台登记、登记占用、环境 | `artifacts/_project/S0-01-项目手册.md` | 重建一份 |
-| precheck 参数 | 接口前缀、表前缀、前端别名、参考目录、身份字段、项目专有名词 | `artifacts/_project/S0-02-precheck.json` | S0 建，S2 Step 0 补 |
+| precheck 参数 | 接口前缀、表前缀、前端别名、参考目录、身份字段、项目专有名词、公共目录（`shared_paths`）、项目专有禁用写法（`custom_checks`）、patch 改名（`patch_names`） | `artifacts/_project/S0-02-precheck.json` | S0 建，S2 Step 0 补 |
 | 需求产物 | 本需求的口径、编码、设计、坑 | `artifacts/{需求}/` | 不复用 |
 
 - skill 里不出现任何项目或需求专有内容：仓名、服务名、包名、类名、表名、字段名、字典编码、配置键、地址、人名、需求编号、某个业务场景独有的规则。举例只用占位符：`{仓}`、`{Helper}`、`tb_{xxx}`。
@@ -28,9 +28,10 @@ python sop-s2-implement-deliver/precheck.py --lint-sop <sop-v2 目录> --config 
 | 每个 `SKILL.md` | 120 行 |
 | 其他 `.md`（总纲、模板） | 200 行 |
 | 全部 `.md` 合计（不含 README） | 1240 行 |
-| `precheck.py` | 1450 行 |
+| `precheck.py` | 1700 行 |
+| `pack.py` | 300 行 |
 
-md/`precheck` 上限含验收剧本走查、数据源必问、短清单禁 Q、增量/全量分块、00 格≤40 字、H3–H6。不另开文件。
+`precheck.py` 上限含成员与 lambda 核对（J3/J5）、改动范围（C3）、终包与轮次状态（H3–H8）、原文落盘。`pack.py` 是唯一另开的脚本：出包和自证要往仓对象库写临时对象，与只读的 precheck 分开；有了它，各需求不再按轮生成打包或校验脚本。
 
 超限 lint 即 FAIL。超了只能删或合并，不能拆新文件绕过。上限本身要改，同时改 `precheck.py` 的 `LINT_LIMITS` 并写明理由。
 

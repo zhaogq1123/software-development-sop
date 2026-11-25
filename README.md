@@ -30,7 +30,7 @@ SOP 硬约束：只写通用流程、无项目专有、篇幅上限、加规则�
 
 ## 你要做的事
 
-无前期准备。停下时打开 `artifacts/{需求}/00-当前位置.md`，只做「你要做的」，只看点名的文件。S3 可能是多步短清单（含选择表）；对话末条只发该正文。对照：[当前位置](./sop-overview/生命周期.md)。
+无前期准备。停下时打开 `artifacts/{需求}/00-当前位置.md`，只做「你要做的」，只看点名的文件。S3 可能是多步短清单（含选择表）；对话末条只发该正文。S3 每带回一轮结果开一个新会话；在真实仓改过代码就带回 `git diff` 导出的文件。对照：[当前位置](./sop-overview/生命周期.md)。
 
 ## 目录
 
@@ -40,7 +40,7 @@ sop-v2/
   sop-overview/                 总纲
   sop-s0-project-handbook/
   sop-s1-requirement-design/
-  sop-s2-implement-deliver/     含 precheck.py
+  sop-s2-implement-deliver/     含 precheck.py（静态检查）、pack.py（出改动包）
   sop-s3-verify-fix/
   sop-r-retrospective/
 ```
@@ -52,14 +52,14 @@ artifacts/
     00-当前位置.md
     S1/   S1-00-原文/ … S1-07（按类型）
     S2/   S2-01 … S2-08；可选 S2-05-api/
-    handoff/{需求}-r{N}/     当前终包（白名单；不嵌套 S2/）；旧轮 _archived/
+    handoff/{需求}-r{N}/     当前终包（白名单；不嵌套 S2/；pack.py 出）；旧轮 _archived/
     S3/   S3-01-结果-rN.md  S3-02-处理记录.md
     R/    R-01-复盘.md
 ```
 
 ## 导入
 
-把 `sop-v2/sop-*` 拷到 `.cursor/skills/` 或 `~/.cursor/skills/`。导入前可 `python sop-v2/sop-s2-implement-deliver/precheck.py --selftest`。
+把 `sop-v2/sop-*` 拷到 `.cursor/skills/` 或 `~/.cursor/skills/`。导入前可跑 `precheck.py --selftest` 与 `pack.py --selftest`。项目专有检查写 `S0-02-precheck.json` 的 `custom_checks`，不改已安装的脚本（更新 skill 会覆盖）。
 
 ## 适用范围
 

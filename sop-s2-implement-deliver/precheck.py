@@ -6,6 +6,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   python precheck.py --out <S2目录> --repo <仓或大仓子目录> [--repo ...]
                      [--handoff <改动包目录>] [--base <目录名>=<基线commit>] [--no-patch] [--allow-dirty]
                      [--write-manifest] [--config <precheck.json>] [--s1 <S1目录>]
+  python precheck.py --state <artifacts/需求目录> --handoff <改动包目录>    写完 00-当前位置 后跑（H6/H7/H8）
   python precheck.py --lint-sop <sop-v2目录> [--config <precheck.json>]
   python precheck.py --ingest <原文文件> [<原文文件> ...] --out <S1/S1-00-原文>
   python precheck.py --selftest
@@ -20,7 +21,10 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   H1 交付目录文件齐全              G1 无未提交文件（--allow-dirty 降 WARN）
   H2 交付目录不留 S2-04-verify/out.txt、S2-04-verify/env.local（自测输出与凭据）
   J1 Java import 可解析            J2 实体字段 ↔ S2-02-sql/ DDL 列（跳过 @TableField(exist=false)、static）
-  J3 工作区有源码的类型：改动里的 get/set/is 成员须在源码中存在（Lombok @Data/@Getter/@Setter/@Value 按字段计）
+  J3 工作区有源码的类型：改动里的 get/set/is 成员须在源码中存在（Lombok @Data/@Getter/@Setter/@Value 按字段计；
+     变量类型取访问之前最近的声明；有父类的类型、导入了但不在索引里的类型不核）
+  J5 lambda 里引用的局部变量不得有语句级再赋值（须 effectively final）
+  X2 config.custom_checks：项目专有的禁用写法 [{code, pattern, ext, message}]，命中即 ERROR（code 缺省 X2）
   F1 前端 import 可解析            F2 前端请求路径 ↔ Controller 映射
   Q1 上线手册含 S2-02-sql/*.sql 原文，或「文件名 + sha256:哈希」引用
   Q2 上线手册包含 S2-03-config/*.diff 的每条改动行
@@ -29,17 +33,21 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   N2 Feign 调用路径 ↔ 提供方 Controller 映射（含 ref_dirs）
   S1 Controller 入参 DTO 含身份字段（安全类，仅 WARN）
   C1 S1「改动面」列出的每个仓、以及带扩展名的文件都有改动       C2 代码走读「接触点」里要改/新建的仓都在改动面
+  C3 有改动的文件都列在改动面（或当轮 S3-02「改动文件」列）；落在 config.shared_paths 的，所在行须引 D-xx
   D1 新功能 S1：评审摘要、验收剧本、路径矩阵、接口三列、按建议会怎样、术语映射；精简版 S1-07 要有评审摘要、验收剧本、按建议会怎样、交付选项
   D2 决定表里状态为有效的 D-xx 必须出现在验收里；有设计说明就得有决定表
   R1 S2-08-审查.md：AC 全覆盖、结论用规定词、引用位置存在、环境登记的节名在上线手册里、阻塞类问题无「待修」、文内含「审查会话：新会话」
   V1 审查结论为已实现或环境登记的 AC 必须写进验证清单；改动面含页面文件时清单须有浏览器操作
   X1 S1/S1-00-原文/正文.md 为 UTF-8 且无替换字符；media/ 每张图在清单里有状态，待看和无法看不能过
   K1 类型为小改动、线上缺陷、纯配置时，不得另有新建表、平台登记或（纯配置）代码改动
-  U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo
+  U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo（patch 名可经 config.patch_names 映射到目录名）
   H3 改动包根目录增量仅允许 r{N-1}to-r{N}（任意轮次；禁止远距 from）
   H4 改动包 README 门禁表含「交付可用性」
-  H5 终包白名单：无嵌套 S2/；根目录仅 README/manifest/precheck-report/合法相邻增量
+  H5 终包白名单：无嵌套 S2/；根目录仅 README/manifest/precheck-report/preimage/合法相邻增量
   H6 改动包 README 内容预算：≤80 行；除 r{N}/r{N-1} 外不罗列≥2 个更早轮号；「你要做的」≤35 行/前置≤2/本轮≤6/每步≤120 字/禁嵌套/禁待定 Q；增量与全量命令分块；00 非清单格≤40 字
+  H7 轮次状态一致：README「改动包」轮号=目录轮号、生成日期不晚于今天；S3-02 有且只有一个 r{N-1} 节，其编号不与别的节重复，表头含「期望」「改动文件」「先例」；
+     相邻增量触及的文件都列在该节；--state 另核：终包里的 precheck-report 末行 PASS、00 的轮次=终包轮号、日期不晚于今天、「你要做的」与 README 同文
+  H8 有相邻增量就要有 preimage.txt（打补丁前的文件指纹），且 README 写了核对命令
   T1 改动文件不留「待联调核对」类标记（config.defer_markers）
   A1 S2/S2-05-api/ 接口文档与冒烟集合的路径都在 Controller 映射里；集合覆盖 S2-04-verify/cases.json 的全部 AC
   M1 manifest 哈希（仅改动包形态）
@@ -50,8 +58,9 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
 项目参数从 --config JSON 读，默认见 DEFAULT_CONFIG；放 artifacts/_project/S0-02-precheck.json，项目级，不按需求裁剪。
 退出码 0 PASS / 1 FAIL。
 """
-import argparse, hashlib, io, json, os, re, shutil, subprocess, sys, tempfile, zipfile
+import argparse, bisect, hashlib, io, json, os, re, shutil, subprocess, sys, tempfile, zipfile
 import xml.etree.ElementTree as ET
+from datetime import date
 from pathlib import Path
 
 DEFAULT_CONFIG = {
@@ -63,9 +72,12 @@ DEFAULT_CONFIG = {
     "identity_fields": ["mobile", "phone", "account", "userId", "userAccount"],
     "project_terms": [],
     "defer_markers": ["联调核对", "待联调", "需内网", "待核对", "待确认"],
+    "shared_paths": [],   # 同仓公共目录（公共组件、工具、基类）的路径片段
+    "custom_checks": [],  # 项目专有的禁用写法：{"code": "X2", "pattern": 正则, "ext": [".java"], "message": 说明}
+    "patch_names": {},    # patch 文件名（不带扩展名）-> 目录名
 }
-# 与 sop-overview/SOP约束.md 一致。md 合计含 S3 用户动作清单与多轮选择；py 含 J3 与原文落盘等。
-LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1240, "py": 1450}
+# 与 sop-overview/SOP约束.md 一致。py 是 precheck.py 的上限，其他 .py 按文件名另列。
+LINT_LIMITS = {"SKILL.md": 120, "md": 200, "md_total": 1240, "py": 1700, "pack.py": 300}
 DATE_RE = re.compile(r'\b20\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b')
 AC_RE = re.compile(r'\bAC-\d+\b')
 VERDICTS = ("已实现", "未实现", "本期不做", "环境登记")
@@ -86,8 +98,14 @@ FIELD_RE = re.compile(r'((?:@\w+(?:\([^)]*\))?\s*)*)(?:private|protected)\s+((?:
 DDL_RE = re.compile(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\((.*?)\)\s*ENGINE', re.S | re.I)
 DDL_COL_RE = re.compile(r'^\s*`(\w+)`', re.M)
 LOMBOK_RE = re.compile(r'@(?:Data|Getter|Setter|Value)\b')
-METHOD_ACC_RE = re.compile(r'(?:public|protected|private)\s+(?:static\s+)?(?:[\w.<>,?\[\]]+)\s+(get|set|is)([A-Z]\w*)\s*\(')
-TYPE_VAR_RE = re.compile(r'(?<![\w.@])([A-Z]\w*)(?:<[^>\n;]*>)?\s+(\w+)\s*(?:=|;|,|\)|:)')
+PKG_FIELD_RE = re.compile(r'\n[ \t]*[\w<>\[\], ?.]+\s+(\w+)\s*(?:=[^;]*)?;')  # 无修饰符的字段
+METHOD_ACC_RE = re.compile(r'(?:public|protected|private)\s+(?:static\s+)?(?:[\w.<>,?\[\] ]+)\s+(get|set|is)([A-Z]\w*)\s*\('
+                           r'|^[ \t]*(?:[\w.<>,?\[\]]+)\s+(get|set|is)([A-Z]\w*)\s*\(', re.M)  # 第二支：接口里无修饰符的方法
+JAVA_KW = frozenset("if for while return new null true false else this switch catch try".split())
+ROUND_RE = re.compile(r'(?<![A-Za-z0-9])r(\d+)(?![A-Za-z0-9])')
+ISSUE_RE = re.compile(r'^[A-D]-\d+$')
+INC_RE = re.compile(r'-r(\d+)to-r(\d+)\.patch$')
+TYPE_VAR_RE = re.compile(r'(?<![\w.@])((?:[a-z_]\w*\.)*[A-Z]\w*)(?:<[^\n;=(){}]*?>)?\s+(\w+)\s*(?:=|;|,|\)|:)')  # 含全限定名、嵌套泛型
 ACCESS_RE = re.compile(r'\b([a-z_]\w*)\s*\.\s*(get|set|is)([A-Z]\w*)\s*\(')
 JAVA_TYPE_KW = frozenset("class interface enum return new throw if for while switch case catch synchronized assert void".split())
 
@@ -219,44 +237,74 @@ def check_java_import(rel, name, wild, idx, src_packages, exclude, rep):
     rep.warn("J1", f"{rel}: import {name}{'.*' if wild else ''} 无源文件，同组依赖也未见使用（新依赖？确认 pom）")
 
 
+def strip_java_comments(txt):
+    return re.sub(r'//[^\n]*', '', re.sub(r'/\*.*?\*/', ' ', txt, flags=re.S))
+
+
 def java_type_members(path, cache):
+    """(字段, get/set/is 方法, 是否 Lombok, 是否有父类)。有父类的成员可能来自继承，本工具不追，调用方跳过。"""
     key = str(path)
     if key in cache: return cache[key]
     txt = read(path)
-    fields = {f for _, _, f in FIELD_RE.findall(txt)}
-    methods = {m.group(1) + m.group(2) for m in METHOD_ACC_RE.finditer(txt)}
-    cache[key] = (fields, methods, bool(LOMBOK_RE.search(txt)))
+    fields = {f for _, _, f in FIELD_RE.findall(txt)} | set(PKG_FIELD_RE.findall(txt))
+    methods = {"".join(g for g in m.groups() if g) for m in METHOD_ACC_RE.finditer(txt)}
+    has_parent = bool(re.search(r'\b(?:class|interface)\s+\w+[^{;]*\bextends\s+', txt))
+    cache[key] = (fields, methods, bool(LOMBOK_RE.search(txt)), has_parent)
     return cache[key]
 
 
-def resolve_java_type_path(simple, pkg, simple_to_fqcn, idx):
-    fqcn = simple_to_fqcn.get(simple) or (f"{pkg}.{simple}" if pkg else None)
-    if fqcn and fqcn in idx["fqcn"]: return idx["fqcn"][fqcn]
-    paths = idx["simple"].get(simple, set())
-    return next(iter(paths)) if len(paths) == 1 else None
-
-
 def check_java_members(rel, txt, idx, rep, cache):
-    """改动文件里对工作区有源码类型的 get/set/is，成员须真实存在。无源码的类型跳过。"""
+    """改动文件里对工作区有源码类型的 get/set/is，成员须真实存在。宁可少判不误报：
+    变量类型取这次访问之前最近的声明（同名变量在不同方法里类型不同）；显式导入却不在索引里的类型、
+    跨包的同名类、有父类的类型都跳过；Lombok 字段首字母大小写都认。"""
+    txt = strip_java_comments(txt)
     pkg_m = re.search(r'^\s*package\s+([\w.]+)\s*;', txt, re.M)
     pkg = pkg_m.group(1) if pkg_m else ""
     simple_to_fqcn = {n.rsplit(".", 1)[-1]: n for n, w in java_imports(txt) if not w and not n.startswith(JDK_PREFIX)}
-    vars_ = {"this": Path(rel).stem}
+    inherits = bool(re.search(r'\b(?:extends|implements)\s', txt))  # this.xxx 可能来自父类或接口默认方法
+    decls = {}  # 变量名 -> ([声明位置], [类型])，按位置升序
     for m in TYPE_VAR_RE.finditer(txt):
         t, v = m.group(1), m.group(2)
         if t in JAVA_TYPE_KW or v in JAVA_TYPE_KW or v[0].isupper(): continue
-        vars_[v] = t
+        pos, types = decls.setdefault(v, ([], []))
+        pos.append(m.start()); types.append(t)
     for m in ACCESS_RE.finditer(txt):
         var, kind, prop = m.group(1), m.group(2), m.group(3)
-        simple = vars_.get(var)
-        if not simple: continue
-        path = resolve_java_type_path(simple, pkg, simple_to_fqcn, idx)
+        if var == "this":
+            if inherits: continue
+            simple = Path(rel).stem
+        else:
+            pos, types = decls.get(var, ([], []))
+            i = bisect.bisect_left(pos, m.start()) - 1
+            if i < 0: continue
+            simple = types[i]
+        fqcn = simple if "." in simple else simple_to_fqcn.get(simple) or (f"{pkg}.{simple}" if pkg else None)
+        path = idx["fqcn"].get(fqcn) if fqcn else None
         if path is None: continue
-        fields, methods, lombok = java_type_members(path, cache)
-        if (kind + prop) in methods: continue
-        field = prop[0].lower() + prop[1:] if prop else prop
-        if lombok and field in fields: continue
+        fields, methods, lombok, has_parent = java_type_members(path, cache)
+        if has_parent or (kind + prop) in methods: continue
+        if lombok and (prop in fields or prop[0].lower() + prop[1:] in fields): continue
         rep.err("J3", f"{rel}: {simple}.{kind}{prop} 在工作区源码中不存在（臆造或拼错）")
+
+
+def lambda_reassigned_var(txt):
+    """J5：返回一个「在 lambda 块里被引用、同一方法里又有语句级再赋值」的局部变量名；没有返回 None。
+    按方法切段（4 空格缩进的可见性修饰符行），段内须同时有带类型的声明赋值与 lambda 外的再赋值；字段不报。"""
+    src = strip_java_comments(txt)
+    starts = [m.start() for m in re.finditer(r'(?m)^    (?:public|private|protected)\s', src)] + [len(src)]
+    regions = []
+    for lm in re.finditer(r'->\s*\{', src):
+        depth, i = 1, lm.end()
+        while i < len(src) and depth:
+            depth += {"{": 1, "}": -1}.get(src[i], 0); i += 1
+        regions.append((lm.end(), i - 1))
+    for a, b in zip(starts, starts[1:]):
+        seg, lam = src[a:b], [(s - a, e - a) for s, e in regions if a <= s < b]
+        for vid in sorted(set(re.findall(r'\b([a-z]\w*)\b', "".join(seg[s:e] for s, e in lam))) - JAVA_KW):
+            assign = re.compile(r'(?:(?<=[;{}(])|^)\s*' + vid + r'\s*=(?![=>])', re.M)
+            if not any(not any(s <= m.start() < e for s, e in lam) for m in assign.finditer(seg)): continue
+            if re.search(r'(?<=[;\s{(])\b[A-Za-z_$][\w.$]*(?:<[^=]*?>)?(?:\s*\[\s*\])?\s+' + vid + r'\s*=(?![=>])', seg): return vid
+    return None
 
 
 def md_table_after(text, heading_kw, header=False):
@@ -748,6 +796,83 @@ def check_plan(s1, changed_by_repo, repos, rep):
                 rep.err("C1", f"改动面列出的文件 {base} 在 {repo} 的改动里没有")
 
 
+def check_scope(s1, changed_by_repo, cfg, rep):
+    """C3：改了的文件都在改动面或处理记录里；公共目录的文件所在行须引 D-xx。"""
+    doc = next((s1 / f for f in ("S1-04-设计说明.md", "S1-07-设计.md") if (s1 / f).exists()), None)
+    rows = md_table_after(read(doc), "改动面") if doc else None
+    if not rows: return
+    lines = [" ".join(c) for c in rows] + [l for l in read(s1.parent / "S3" / "S3-02-处理记录.md").splitlines() if l.startswith("|")]
+    shared = [s.replace("\\", "/").strip("/") for s in cfg["shared_paths"] if s]
+    for d, files in changed_by_repo:
+        for rel in files:
+            stem = re.sub(r'(Tests?|\.test|\.spec)$', '', Path(rel).stem) or Path(rel).stem
+            hit = [l for l in lines if re.search(r'(?<![A-Za-z0-9_])' + re.escape(stem) + r'(?![A-Za-z0-9_])', l)]
+            if not hit:
+                rep.err("C3", f"{d.name}/{rel} 有改动，但不在改动面，也不在处理记录「改动文件」里（先补范围再改；不该动的撤回）")
+            elif any(s in f"{d.name}/{rel}" for s in shared) and not any(re.search(r'\bD-\d+\b', l) for l in hit):
+                rep.err("C3", f"{d.name}/{rel} 在公共目录（shared_paths），所在行没有引 D-xx（生命周期 › 共享边界）")
+
+
+def todo_block(text):
+    m = re.search(r"你要做的（目录.*?^仍待你回报[^\n]*", text, re.S | re.M)
+    if not m: return None
+    return [re.sub(r"\s+", " ", l.replace("`", "")).strip() for l in m.group(0).splitlines() if l.strip() and not re.match(r"^[|\s:-]+$", l)]
+
+
+def check_round_state(handoff, state, rep, with_pos=True):
+    """H7/H8：终包 README、S3-02、00 说的是同一轮。state=artifacts/{需求}。with_pos=False 时不看 00（终检时 00 还没写）。"""
+    hm = re.search(r"-r(\d+)$", handoff.name)
+    if not hm: return
+    rn, today = int(hm.group(1)), date.today().isoformat()
+    def future(name, text):
+        late = next((d for l in text.splitlines() if "日期" in l or "最后更新" in l for d in DATE_RE.findall(l) if d > today), None)
+        if late: rep.err("H7", f"{name} 的日期 {late} 晚于今天 {today}")
+    rtext = read(handoff / "README.md"); future("README", rtext)
+    m = re.search(r"改动包[:：]\s*r(\d+)", rtext)
+    if m and int(m.group(1)) != rn:
+        rep.err("H7", f"README 写的是 r{m.group(1)}，目录是 r{rn}（每轮按模板整份重写，不在上一轮文本上替换）")
+    touched = sorted({f for p in handoff.glob("*.patch") if INC_RE.search(p.name) for f in re.findall(r'^diff --git a/(.+?) b/', read(p), re.M)})
+    if touched:
+        pre = read(handoff / "preimage.txt")
+        if not pre: rep.err("H8", "有相邻增量但没有 preimage.txt（用 pack.py 出包）")
+        elif "preimage.txt" not in rtext: rep.err("H8", "README 没写 preimage.txt 的核对命令（打增量前先核对文件没被改过）")
+        else:
+            miss = [f for f in touched if f not in pre]
+            if miss: rep.err("H8", f"preimage.txt 缺 {miss[0]} 等 {len(miss)} 个增量触及的文件")
+    s3 = state / "S3" / "S3-02-处理记录.md"
+    if rn >= 2 and not s3.exists(): rep.err("H7", f"r{rn} 没有 S3/S3-02-处理记录.md（上一轮结果先落处理记录再出包）")
+    elif s3.exists():
+        stxt = read(s3); future("S3-02", stxt)
+        heads = [(int(h.group(1)), h.start()) for h in re.finditer(r'(?m)^##\s+r(\d+)\b', stxt)]
+        ids = lambda t: [c for l in t.splitlines() if l.startswith("|") for c in [l.split("|")[1].strip()] if ISSUE_RE.match(c)]
+        if rn >= 2:  # 只核本轮新写的 r{N-1} 节；更早的节是已交付轮的记录，不要求回头改
+            at = next((i for i, (r, _) in enumerate(heads) if r == rn - 1), None)
+            if at is None: rep.err("H7", f"S3-02 没有 r{rn - 1} 节（r{rn} 是对 r{rn - 1} 结果的处理）")
+            else:
+                if sum(r == rn - 1 for r, _ in heads) > 1: rep.err("H7", f"S3-02 里 r{rn - 1} 有多节（每轮一节）")
+                end = heads[at + 1][1] if at + 1 < len(heads) else len(stxt)
+                sec, mine, rest = stxt[heads[at][1]:end], ids(stxt[heads[at][1]:end]), ids(stxt[:heads[at][1]] + stxt[end:])
+                dup = sorted({i for i in mine if mine.count(i) > 1 or i in rest})
+                if dup: rep.err("H7", f"S3-02 r{rn - 1} 节编号重复：{', '.join(dup[:5])}（全文件唯一，接着上一轮往下编）")
+                for col in ("期望", "改动文件", "先例"):
+                    if col not in sec: rep.err("H7", f"S3-02 r{rn - 1} 节的表缺「{col}」列（S3 产出模板）")
+                out_of = [f for f in touched if Path(f).name not in sec and Path(f).stem not in sec]
+                if out_of: rep.err("H7", f"相邻增量改了 {out_of[0]} 等 {len(out_of)} 个文件，r{rn - 1} 节「改动文件」没列（先锁范围再改）")
+    if not with_pos: return
+    if (read(handoff / "precheck-report.txt").strip().splitlines() or [""])[-1].strip() != "RESULT: PASS":
+        rep.err("H7", "终包里的 precheck-report.txt 末行不是 RESULT: PASS（终检没过不交付，README 门禁不得写 PASS）")
+    pos = state / "00-当前位置.md"
+    if not pos.exists(): rep.err("H7", f"缺 {pos}"); return
+    ptxt = read(pos); future("00-当前位置", ptxt)
+    cell = lambda key: (re.search(rf"\|\s*{re.escape(key)}\s*\|\s*([^|\n]+)\|", ptxt) or [None, ""])[1].strip()
+    for key in ("类型", "阶段", "形态", "轮次", "最近结果", "阻塞", "下一步"):
+        if len(cell(key)) > 40: rep.err("H6", f"00-当前位置「{key}」超40字（生命周期 › 当前位置）"); break
+    rs = [int(x) for x in ROUND_RE.findall(cell("轮次"))]
+    if rs and max(rs) != rn: rep.err("H7", f"00-当前位置 轮次写的是 r{max(rs)}，终包是 r{rn}")
+    a, b = todo_block(rtext), todo_block(ptxt)
+    if a and a != b: rep.err("H7", "00-当前位置 的「你要做的」与 README 不同文（整份重写后原样复制）")
+
+
 def check_api(out, mappings, cfg, rep):
     api = out / "S2-05-api"
     if not api.is_dir(): return
@@ -853,7 +978,7 @@ def lint_sop(sop_dir, cfg):
         if not p.is_file() or p.suffix not in (".md", ".py") or any(x in cfg["ignore_dirs"] for x in p.parts): continue
         rel, txt = p.relative_to(root).as_posix(), read(p)
         n = len(txt.splitlines())
-        limit = LINT_LIMITS["py"] if p.suffix == ".py" else LINT_LIMITS["SKILL.md"] if p.name == "SKILL.md" else LINT_LIMITS["md"]
+        limit = LINT_LIMITS.get(p.name, LINT_LIMITS["py"]) if p.suffix == ".py" else LINT_LIMITS["SKILL.md"] if p.name == "SKILL.md" else LINT_LIMITS["md"]
         if n > limit: issues.append(("L1", f"{rel} {n} 行，超过上限 {limit}"))
         if p.suffix == ".md" and p.name != "README.md": total += n
         m = DATE_RE.search(txt)
@@ -903,7 +1028,7 @@ def run(a):
         repos.append((d, root, prefix))
     if handoff is not None and (handoff / "patches").exists():
         for pf in sorted((handoff / "patches").glob("*.patch")):
-            if not any(pf.stem == Path(r).resolve().name for r in a.repo):
+            if not any(Path(r).resolve().name in (pf.stem, cfg["patch_names"].get(pf.stem)) for r in a.repo):
                 rep.err("U2", f"改动包里的 {pf.name} 没有对应的 --repo，这个仓的改动没有被检查")
     if handoff is not None:
         hm = re.search(r"-r(\d+)$", handoff.name)
@@ -950,18 +1075,12 @@ def run(a):
             for block in re.findall(r"```(?:[^\n]*)\n(.*?)```", rtext, re.S):
                 if re.search(r"r\d+to-r\d+", block) and "patches/" in block:
                     rep.err("H6", "增量与全量命令须分属独立复制块"); break
-            pos = out.parent / "00-当前位置.md"
-            if pos.exists():
-                ptxt = read(pos)
-                for key in ("类型", "阶段", "形态", "轮次", "最近结果", "阻塞", "下一步"):
-                    m = re.search(rf"\|\s*{re.escape(key)}\s*\|\s*([^|\n]+)\|", ptxt)
-                    if m and len(m.group(1).strip()) > 40:
-                        rep.err("H6", f"00-当前位置「{key}」超40字（生命周期 › 当前位置）"); break
+            check_round_state(handoff, out.parent, rep, with_pos=False)
         # 仅独立终包（与 --out 分离，或目录名 *-r{N}）做白名单；handoff==out 的旧合并布局不套 H5
         if handoff.is_dir() and (handoff.resolve() != out.resolve() or re.search(r"-r\d+$", handoff.name)):
             if (handoff / "S2").exists():
                 rep.err("H5", "改动包内不得有 S2/（与 artifacts/.../S2/ 并列交付，禁止嵌套）")
-            allow_root = {"README.md", "manifest.txt", "precheck-report.txt"}
+            allow_root = {"README.md", "manifest.txt", "precheck-report.txt", "preimage.txt"}
             for p in sorted(handoff.iterdir()):
                 if p.name == "patches" and p.is_dir():
                     continue
@@ -1008,11 +1127,16 @@ def run(a):
             txt = read(p)
             mk = next((m for m in cfg["defer_markers"] if m and m in txt), None)
             if mk: rep.err("T1", f"{d.name}/{rel} 留有「{mk}」：查代码证据定下来，定不了进待定决策，不留到联调")
+            for ck in cfg["custom_checks"]:
+                if rel.endswith(tuple(ck.get("ext") or [""])) and re.search(ck["pattern"], txt):
+                    rep.err(ck.get("code", "X2"), f"{rel}: {ck.get('message', '命中项目禁用写法 ' + ck['pattern'])}")
             if rel.endswith(".java"):
                 rep.count(d.name, "java")
                 for name, wild in java_imports(txt):
                     check_java_import(rel, name, wild, idx, src_packages, all_changed_paths, rep)
                 check_java_members(rel, txt, idx, rep, members_cache)
+                var = lambda_reassigned_var(txt)
+                if var: rep.err("J5", f"{rel}: 变量 {var} 在 lambda 里引用，同一方法里又被再赋值（须 effectively final：各分支只赋一次，或进 lambda 前拷到新变量）")
                 for t in TABLE_RE.findall(txt):
                     if t in ddl:
                         for ann, mods, field in FIELD_RE.findall(txt):
@@ -1070,6 +1194,7 @@ def run(a):
     s1 = Path(a.s1) if getattr(a, "s1", None) else out.parent / "S1"
     if s1.is_dir():
         check_plan(s1, changed_by_repo, repos, rep)
+        check_scope(s1, changed_by_repo, cfg, rep)
         check_review(s1, out, [d for d, _, _ in repos], cfg, rep)
         check_decisions(s1, rep)
         check_source(s1, rep)
@@ -1125,9 +1250,12 @@ def selftest():
             'package com.x.ctl;\nimport com.x.util.Helper;\nimport com.x.util.NotExist;\nimport com.ext.dto.*;\n'
             'import com.ext.dto.GhostVo;\nimport cn.tool.core.convert.Convert;\nimport org.springframework.web.bind.annotation.*;\n'
             '@RestController\n@RequestMapping("svcapi/new")\npublic class NewController {\n'
-            ' @PostMapping("/_search") public void s(@RequestBody @Valid SendReq req){\n'
-            '  OrderVo vo = new OrderVo(); vo.setName("ok"); vo.setProjectMode(1);\n'
-            '  GhostVo g = null; g.setNope(1);\n }\n}\n', encoding="utf-8")
+            '    @PostMapping("/_search")\n    public void s(@RequestBody @Valid SendReq req) {\n'
+            '        OrderVo vo = new OrderVo(); vo.setName("ok"); vo.setProjectMode(1);\n'
+            '        if (req != null) throw new BizError(SomeEnum);\n'
+            '        Map<String,String> m5 = new HashMap<>();\n        if (req != null) { m5 = new HashMap<>(); }\n'
+            '        java.util.function.Supplier<Integer> sup = () -> { return m5.size(); };\n'
+            '        GhostVo g = null; g.setNope(1);\n    }\n}\n', encoding="utf-8")
         (svc / "src/main/java/com/x/ctl/SendReq.java").write_text(
             'package com.x.ctl;\npublic class SendReq {\n private String mobile;\n private String code;\n}\n', encoding="utf-8")
         (svc / "src/main/java/com/x/ctl/BApi.java").write_text(
@@ -1151,6 +1279,7 @@ def selftest():
         (out / "S2-07-验证清单.md").write_text("x", encoding="utf-8")
         (out / "patches/svc-a.patch").write_text("x", encoding="utf-8")
         (out / "patches/svc-z.patch").write_text("x", encoding="utf-8")
+        (out / "patches/a-svc.patch").write_text("x", encoding="utf-8")
         (out / "S2-04-verify").mkdir(); (out / "S2-04-verify/out.txt").write_text("PASS=1", encoding="utf-8")
         (out / "S2-04-verify/cases.json").write_text('[{"ac": "AC-01"}, {"ac": "AC-02"}, {"ac": "AC-06"}]', encoding="utf-8")
         (out / "S2-05-api").mkdir()
@@ -1184,7 +1313,8 @@ def selftest():
                                     "| AC-04 | 由平台承载 | 平台承载 |\n| AC-05 | 环境侧 | 环境登记 |\n| AC-06 | 页面 | 本期不做（D-01） |\n| AC-07 | 页面 | 本期不做（D-01） |\n\n## 问题\n| 编号 | 类别 | 问题 | 位置 | 状态 |\n|---|---|---|---|---|\n"
                                     "| P-01 | 需求不符 | 审批可绕过 | | 待修 |\n| P-02 | 安全 | 身份取自请求 | | 后续优化 |\n", encoding="utf-8")
         cfgp = T / "precheck.json"; cfgp.write_text(json.dumps({"api_prefixes": ["/svcapi/"], "table_prefixes": ["tb_"],
-                                                                "ref_dirs": [str(ref)]}), encoding="utf-8")
+                                                                "ref_dirs": [str(ref)], "shared_paths": ["ctl/NewController"], "patch_names": {"a-svc": "svc-a"},
+                                                                "custom_checks": [{"code": "J4", "pattern": r"new\s+BizError\(\s*\w+\s*\)", "ext": [".java"], "message": "BizError 没有单参构造器"}]}), encoding="utf-8")
         ns = lambda **kw: argparse.Namespace(**{"out": str(out), "handoff": None, "repo": [str(svc), str(web)],
                                                "base": [f"svc-a={base}", f"web-a={base}"], "no_patch": False, "allow_dirty": False,
                                                "write_manifest": True, "config": str(cfgp), **kw})
@@ -1192,7 +1322,8 @@ def selftest():
         msgs = [(lv, c, m) for lv, c, m in rep.issues]
         has = lambda lv, c, s="": any(l == lv and k == c and s in m for l, k, m in msgs)
         failures = []
-        for want, s in (("J1", "NotExist"), ("J2", "wrong_field"), ("J3", "setProjectMode"), ("F1", "missing"), ("Q1", ""), ("Q2", "ghost")):
+        for want, s in (("J1", "NotExist"), ("J2", "wrong_field"), ("J3", "setProjectMode"), ("J4", "BizError"), ("J5", "m5"), ("C3", "SendReq"), ("C3", "公共目录"),
+                        ("F1", "missing"), ("Q1", ""), ("Q2", "ghost")):
             if not has("ERROR", want, s): failures.append(f"期望 ERROR {want} 未触发")
         if not has("WARN", "N1", "ghost"): failures.append("期望 WARN N1 未触发")
         if not has("WARN", "F2", "_nope"): failures.append("期望 WARN F2 未触发")
@@ -1208,8 +1339,10 @@ def selftest():
                         ("R1", "AC-05"), ("R1", "AC-06"), ("R1", "审查会话"), ("C2", "svc-b"), ("U2", "svc-z"), ("H2", "out.txt"), ("V1", "AC-01"), ("X1", "正文.md")):
             if not has("ERROR", want, s): failures.append(f"期望 ERROR {want}（{s}）未触发")
         for c, s in (("Q3", "tb_menu"), ("Q1", "big.sql"), ("C1", "svc-a"), ("C1", "svc-c"), ("C1", "new.ts"), ("R1", "AC-01"), ("R1", "AC-07"), ("R1", "P-02"), ("N2", "/inner/b/ok"),
-                     ("C2", "svc-a"), ("C2", "web-a"), ("U2", "svc-a"), ("D1", ""), ("A1", "_search"), ("A1", "login"), ("A1", "AC-01,"), ("V1", "AC-07")):
+                     ("C2", "svc-a"), ("C2", "web-a"), ("U2", "svc-a"), ("U2", "a-svc"), ("C3", "new.ts"), ("D1", ""), ("A1", "_search"), ("A1", "login"), ("A1", "AC-01,"), ("V1", "AC-07")):
             if has("ERROR", c, s) or has("WARN", c, s): failures.append(f"{c}（{s}）不应报")
+        if lambda_reassigned_var('class A {\n    public void t() {\n        String k9 = "a";\n        Runnable r = () -> { use(k9); };\n    }\n'
+                                 '    public void u() {\n        String k9 = "a";\n        k9 = "b";\n    }\n}\n'): failures.append("另一个方法里的同名变量再赋值不应报 J5")
         if not has("WARN", "N2", "/inner/b/send"): failures.append("期望 WARN N2 未触发")
         if not has("WARN", "S1", "mobile"): failures.append("期望 WARN S1 未触发")
         if rep.counts.get("svc-a", {}).get("java") != 4 or rep.counts.get("web-a", {}).get("fe") != 2: failures.append(f"文件计数错误 {rep.counts}")
@@ -1256,11 +1389,37 @@ def selftest():
         (h3d / "README.md").write_text("| 交付可用性 | 通过 |\n```\ngit apply a-r1to-r2.patch\ngit apply patches/a.patch\n```\n", encoding="utf-8")
         rep_h6d = run(ns(handoff=str(h3d)))
         if not any(c == "H6" and "独立复制块" in m for _, c, m in rep_h6d.issues): failures.append("期望 H6 增量全量同块未触发")
-        pos_dir = T / "art"; pos_dir.mkdir(exist_ok=True)
-        (pos_dir / "00-当前位置.md").write_text("| 阶段 | " + ("长" * 41) + " |\n", encoding="utf-8")
-        (h3d / "README.md").write_text("| 交付可用性 | 通过 |\n", encoding="utf-8")
-        rep_h6e = run(ns(out=str(pos_dir / "S2"), handoff=str(h3d)))
-        if not any(c == "H6" and "超40字" in m for _, c, m in rep_h6e.issues): failures.append("期望 H6 00格超长未触发")
+        art = T / "art"; (art / "S3").mkdir(parents=True)
+        todo = "你要做的（目录：x）\n本轮操作：\n1. 打补丁 — 粘回：ok\n仍待你回报：无\n"
+        sec4 = "## r4（x）\n| 编号 | 类 |\n|---|---|\n| B-01 | 编译 |\n"
+        (art / "00-当前位置.md").write_text("| 阶段 | " + "长" * 41 + " |\n| 轮次 | r5 |\n最后更新：20" + "99-12-31\n" + todo.replace("ok", "好"), encoding="utf-8")
+        sec5 = sec4.replace("r4", "r5")
+        (art / "S3/S3-02-处理记录.md").write_text(sec4 + sec5 + sec5, encoding="utf-8")
+        (h3d / "README.md").write_text("改动包：r5\n| 交付可用性 | 通过 |\n" + todo, encoding="utf-8")
+        (h3d / "svc-a-r5to-r6.patch").write_text("diff --git a/svc-a/X.java b/svc-a/X.java\n", encoding="utf-8")
+        (h3d / "precheck-report.txt").write_text("ERROR [R1] x\nRESULT: FAIL\n", encoding="utf-8")
+        rs = Report(); check_round_state(h3d, art, rs)
+        for c, s in (("H6", "超40字"), ("H7", "晚于今天"), ("H7", "README 写的是 r5"), ("H7", "多节"), ("H7", "编号重复"), ("H7", "precheck-report"),
+                     ("H7", "轮次写的是 r5"), ("H7", "不同文"), ("H8", "没有 preimage")):
+            if not any(k == c and s in m for _, k, m in rs.issues): failures.append(f"期望 {c}（{s}）未触发")
+        (art / "S3/S3-02-处理记录.md").write_text(sec4, encoding="utf-8")
+        rs = Report(); check_round_state(h3d, art, rs, with_pos=False)
+        if not any(c == "H7" and "没有 r5 节" in m for _, c, m in rs.issues): failures.append("期望 H7（没有 r5 节）未触发")
+        (art / "00-当前位置.md").write_text("| 阶段 | S3 |\n| 轮次 | r6 |\n" + todo, encoding="utf-8")
+        (art / "S3/S3-02-处理记录.md").write_text(sec4 + sec4 + "## r5（y）\n| 编号 | 类 | 期望 | 改动文件 | 先例 |\n|---|---|---|---|---|\n| B-02 | 编译 | 过 | X.java | Y.java:3 |\n", encoding="utf-8")
+        (h3d / "README.md").write_text("改动包：r6\n| 交付可用性 | 通过 |\n先核对 preimage.txt\n" + todo, encoding="utf-8")
+        (h3d / "preimage.txt").write_text("svc-a/X.java  abc\n", encoding="utf-8")
+        (h3d / "precheck-report.txt").write_text("WARN [U1] x\nRESULT: PASS\n", encoding="utf-8")
+        rs = Report(); check_round_state(h3d, art, rs)
+        if rs.issues: failures.append(f"轮次状态一致（更早的节重复不追究）时不应报：{rs.issues[0]}")
+        (h3d / "svc-a-r5to-r6.patch").write_text("diff --git a/svc-a/X.java b/svc-a/X.java\ndiff --git a/svc-a/Z.java b/svc-a/Z.java\n", encoding="utf-8")
+        rs = Report(); check_round_state(h3d, art, rs)
+        for c, s in (("H7", "没列"), ("H8", "缺 svc-a/Z.java")):
+            if not any(k == c and s in m for _, k, m in rs.issues): failures.append(f"期望 {c}（{s}）未触发")
+        (art / "S3/S3-02-处理记录.md").write_text(sec4 + "## r5（y）\n| 编号 | 类 | 改动文件 | 先例 |\n|---|---|---|---|\n| B-02 | 编译 | X.java | Y.java:3 |\n", encoding="utf-8")
+        (h3d / "svc-a-r5to-r6.patch").write_text("diff --git a/svc-a/X.java b/svc-a/X.java\n", encoding="utf-8")
+        rs = Report(); check_round_state(h3d, art, rs)
+        if not any(c == "H7" and "期望" in m for _, c, m in rs.issues): failures.append("期望 H7（缺期望列）未触发")
         (h3d / "S2").mkdir(exist_ok=True)
         (h3d / "extra.txt").write_text("x", encoding="utf-8")
         rep_h5 = run(ns(handoff=str(h3d)))
@@ -1405,7 +1564,7 @@ def selftest():
         print(text); print("---")
         if failures:
             print("SELFTEST FAIL"); [print(" -", f) for f in failures]; return 1
-        print("SELFTEST PASS（J1 J2 J3 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 D1 R1 H2 H3 H4 H5 H6 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
+        print("SELFTEST PASS（J1 J2 J3 J5 X2 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 C3 D1 R1 H2-H8 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
     finally:
         shutil.rmtree(T, ignore_errors=True)
 
@@ -1423,10 +1582,16 @@ def main():
     ap.add_argument("--s1", help="S1 目录；默认 --out 的同级 S1/")
     ap.add_argument("--lint-sop", help="检查 sop-v2 自身：篇幅、日期、project_terms（见 SOP约束.md）")
     ap.add_argument("--ingest", nargs="+", help="原文文件。与 --out（S1/S1-00-原文目录）合用，落成 UTF-8 正文")
+    ap.add_argument("--state", help="artifacts/{需求} 目录。与 --handoff 合用：写完 00-当前位置 后核轮次状态（H6/H7/H8）")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"): sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if a.selftest: sys.exit(selftest())
+    if a.state:
+        if not a.handoff: ap.error("--state 需要 --handoff")
+        rep = Report(); check_round_state(Path(a.handoff), Path(a.state), rep)
+        bad = [f"ERROR [{c}] {m}" for _, c, m in rep.issues]
+        print("\n".join(bad + ["RESULT: " + ("FAIL" if bad else "PASS")])); sys.exit(1 if bad else 0)
     if a.lint_sop:
         text, ok = lint_sop(a.lint_sop, load_cfg(a.config)); print(text); sys.exit(0 if ok else 1)
     if a.ingest:
