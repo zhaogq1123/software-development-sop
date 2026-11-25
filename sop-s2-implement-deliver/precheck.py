@@ -39,7 +39,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   H3 改动包根目录增量仅允许 r{N-1}to-r{N}（任意轮次；禁止远距 from）
   H4 改动包 README 门禁表含「交付可用性」
   H5 终包白名单：无嵌套 S2/；根目录仅 README/manifest/precheck-report/合法相邻增量
-  H6 改动包 README 内容预算：≤80 行；除 r{N}/r{N-1} 外不罗列≥2 个更早轮号；「你要做的」≤35 行/前置≤2/本轮≤6/每步≤120 字/禁嵌套/禁待定 Q
+  H6 改动包 README 内容预算：≤80 行；除 r{N}/r{N-1} 外不罗列≥2 个更早轮号；「你要做的」≤35 行/前置≤2/本轮≤6/每步≤120 字/禁嵌套/禁待定 Q；增量与全量命令分块；00 非清单格≤40 字
   T1 改动文件不留「待联调核对」类标记（config.defer_markers）
   A1 S2/S2-05-api/ 接口文档与冒烟集合的路径都在 Controller 映射里；集合覆盖 S2-04-verify/cases.json 的全部 AC
   M1 manifest 哈希（仅改动包形态）
@@ -947,6 +947,16 @@ def run(a):
                     rep.err("H6", "「你要做的」本轮操作超过 6 步")
                 if re.search(r"\bQ-\d+\b|逐条回", m_todo.group(1)):
                     rep.err("H6", "「你要做的」禁待定 Q/逐条回（必问未关停在必问态，不出执行清单）")
+            for block in re.findall(r"```(?:[^\n]*)\n(.*?)```", rtext, re.S):
+                if re.search(r"r\d+to-r\d+", block) and "patches/" in block:
+                    rep.err("H6", "增量与全量命令须分属独立复制块"); break
+            pos = out.parent / "00-当前位置.md"
+            if pos.exists():
+                ptxt = read(pos)
+                for key in ("类型", "阶段", "形态", "轮次", "最近结果", "阻塞", "下一步"):
+                    m = re.search(rf"\|\s*{re.escape(key)}\s*\|\s*([^|\n]+)\|", ptxt)
+                    if m and len(m.group(1).strip()) > 40:
+                        rep.err("H6", f"00-当前位置「{key}」超40字（生命周期 › 当前位置）"); break
         # 仅独立终包（与 --out 分离，或目录名 *-r{N}）做白名单；handoff==out 的旧合并布局不套 H5
         if handoff.is_dir() and (handoff.resolve() != out.resolve() or re.search(r"-r\d+$", handoff.name)):
             if (handoff / "S2").exists():
@@ -1243,6 +1253,14 @@ def selftest():
         (h3d / "README.md").write_text("你要做的（目录：x）\n前置：\n1. 打补丁 — 粘回：ok\n2. 逐条回 Q-18 — 粘回：答复\n## 门禁\n| 交付可用性 | 通过 |\n", encoding="utf-8")
         rep_h6c = run(ns(handoff=str(h3d)))
         if not any(c == "H6" and "待定 Q" in m for _, c, m in rep_h6c.issues): failures.append("期望 H6 禁待定 Q 未触发")
+        (h3d / "README.md").write_text("| 交付可用性 | 通过 |\n```\ngit apply a-r1to-r2.patch\ngit apply patches/a.patch\n```\n", encoding="utf-8")
+        rep_h6d = run(ns(handoff=str(h3d)))
+        if not any(c == "H6" and "独立复制块" in m for _, c, m in rep_h6d.issues): failures.append("期望 H6 增量全量同块未触发")
+        pos_dir = T / "art"; pos_dir.mkdir(exist_ok=True)
+        (pos_dir / "00-当前位置.md").write_text("| 阶段 | " + ("长" * 41) + " |\n", encoding="utf-8")
+        (h3d / "README.md").write_text("| 交付可用性 | 通过 |\n", encoding="utf-8")
+        rep_h6e = run(ns(out=str(pos_dir / "S2"), handoff=str(h3d)))
+        if not any(c == "H6" and "超40字" in m for _, c, m in rep_h6e.issues): failures.append("期望 H6 00格超长未触发")
         (h3d / "S2").mkdir(exist_ok=True)
         (h3d / "extra.txt").write_text("x", encoding="utf-8")
         rep_h5 = run(ns(handoff=str(h3d)))
