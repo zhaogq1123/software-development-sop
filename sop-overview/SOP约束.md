@@ -31,7 +31,7 @@ python sop-s2-implement-deliver/precheck.py --lint-sop <sop-v2 目录> --config 
 | `precheck.py` | 1700 行 |
 | `pack.py` | 300 行 |
 
-`precheck.py` 上限含成员与 lambda 核对（J3/J5）、改动范围（C3）、终包与轮次状态（H3–H8）、最终态/升级清理分流（Q4）、页面 AC 须进 verify 或标纯 UI（V1）、原文落盘。`pack.py` 是唯一另开的脚本：出包和自证要往仓对象库写临时对象，与只读的 precheck 分开；有了它，各需求不再按轮生成打包或校验脚本。
+`precheck.py` 上限含成员与 lambda 核对（J3/J5）、改动范围（C3）、终包与轮次状态（H3–H8）、最终态/升级清理分流（Q4）、必交 verify 包与页面 AC（V1）、原文落盘。`pack.py` 是唯一另开的脚本：出包和自证要往仓对象库写临时对象，与只读的 precheck 分开；有了它，各需求不再按轮生成打包或校验脚本。
 
 超限 lint 即 FAIL。超了只能删或合并，不能拆新文件绕过。上限本身要改，同时改 `precheck.py` 的 `LINT_LIMITS` 并写明理由。
 

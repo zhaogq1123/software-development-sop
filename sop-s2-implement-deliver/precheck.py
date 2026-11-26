@@ -38,8 +38,8 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   D1 新功能 S1：评审摘要、验收剧本、路径矩阵、接口三列、按建议会怎样、术语映射；精简版 S1-07 要有评审摘要、验收剧本、按建议会怎样、交付选项
   D2 决定表里状态为有效的 D-xx 必须出现在验收里；有设计说明就得有决定表
   R1 S2-08-审查.md：AC 全覆盖、结论用规定词、引用位置存在、环境登记的节名在上线手册里、阻塞类问题无「待修」、文内含「审查会话：新会话」
-  V1 审查结论为已实现或环境登记的 AC 必须写进验证清单；改动面含页面时清单须有浏览器操作；
-     清单里未标「纯 UI」的页面/浏览器 AC 须出现在 S2-04-verify/cases.json（或冒烟 Postman）
+  V1 有验证清单则必交 S2-04-verify（cases.json + run.ps1|sh + env.example）；审查已实现/环境登记的 AC 须进清单；
+     改动面含页面时清单须有浏览器操作；未标「纯 UI」的页面 AC 须进 cases.json（或 Postman）
   X1 S1/S1-00-原文/正文.md 为 UTF-8 且无替换字符；media/ 每张图在清单里有状态，待看和无法看不能过
   K1 类型为小改动、线上缺陷、纯配置时，不得另有新建表、平台登记或（纯配置）代码改动
   U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo（patch 名可经 config.patch_names 映射到目录名）
@@ -994,6 +994,14 @@ def check_review(s1, out, repo_dirs, cfg, rep):
         elif verdict.startswith("本期不做") and ac in verified:
             rep.err("R1", f"{ac} 标本期不做但 verify 在测它：本端部分按已实现/未实现判，只有整条由另一端表现才本期不做")
     checklist = read(out / "S2-07-验证清单.md") if (out / "S2-07-验证清单.md").exists() else ""
+    if checklist:
+        vdir = out / "S2-04-verify"
+        if not (vdir / "cases.json").exists():
+            rep.err("V1", "缺 S2-04-verify/cases.json（测试可执行包必交；本机不能跑也要交，由环境执行）")
+        elif not ((vdir / "run.ps1").exists() or (vdir / "run.sh").exists()):
+            rep.err("V1", "缺 S2-04-verify/run.ps1 或 run.sh")
+        elif not (vdir / "env.example").exists():
+            rep.err("V1", "缺 S2-04-verify/env.example")
     for ac, cells in mapped.items():
         verdict = cells[col] if -len(cells) <= col < len(cells) else ""
         if verdict.startswith(("已实现", "环境登记")) and ac not in checklist:
@@ -1339,6 +1347,8 @@ def selftest():
         (out / "patches/a-svc.patch").write_text("x", encoding="utf-8")
         (out / "S2-04-verify").mkdir(); (out / "S2-04-verify/out.txt").write_text("PASS=1", encoding="utf-8")
         (out / "S2-04-verify/cases.json").write_text('[{"ac": "AC-01"}, {"ac": "AC-02"}, {"ac": "AC-06"}]', encoding="utf-8")
+        (out / "S2-04-verify/run.ps1").write_text(".", encoding="utf-8")
+        (out / "S2-04-verify/env.example").write_text("TOKEN=\n", encoding="utf-8")
         (out / "S2-05-api").mkdir()
         (out / "S2-05-api/接口文档.openapi.json").write_text(json.dumps({"openapi": "3.0.0", "paths": {"/svc/svcapi/new/_search": {}, "/svcapi/ghost": {}}}), encoding="utf-8")
         (out / "S2-05-api/冒烟.postman_collection.json").write_text(json.dumps({"item": [
@@ -1620,6 +1630,10 @@ def selftest():
         if "整份无文本层" not in bman: failures.append("整份无文本层应记入清单，不能当成已落盘原文")
         pv = T / "pvs1"; pv.mkdir()
         (pv / "S1-07-设计.md").write_text("## 改动面\n| 仓 | 文件 |\n|---|---|\n| web | a.vue |\n", encoding="utf-8")
+        (out / "S2-04-verify/run.ps1").unlink(missing_ok=True)
+        pr0 = Report(); check_review(pv, out, [], DEFAULT_CONFIG, pr0)
+        if not any(c == "V1" and "run.ps1" in m for _, c, m in pr0.issues): failures.append("有清单缺 run 应报 V1")
+        (out / "S2-04-verify/run.ps1").write_text(".", encoding="utf-8")
         pr = Report(); check_review(pv, out, [], DEFAULT_CONFIG, pr)
         if not any(c == "V1" and "浏览器" in m for _, c, m in pr.issues): failures.append("页面改动缺浏览器验证应报 V1")
         (out / "S2-07-验证清单.md").write_text("| 4.2 | 页面可见 | AC-09 浏览器看弹层 | | 手工 |\n", encoding="utf-8")
