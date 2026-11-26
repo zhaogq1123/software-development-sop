@@ -29,6 +29,7 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   Q1 上线手册含 S2-02-sql/*.sql 原文，或「文件名 + sha256:哈希」引用
   Q2 上线手册包含 S2-03-config/*.diff 的每条改动行
   Q3 SQL 可重入（CREATE TABLE 缺 IF NOT EXISTS、INSERT 无 NOT EXISTS/ON DUPLICATE/IGNORE/先删 → ERROR）
+  Q4 sql/config 头须标「适用：最终态|升级清理」；升级清理禁入「你要做的」，手册里只许出现在含「升级清理」或「三附」的节
   N1 S2-03-config/*.diff 新增接口路径 ↔ Controller 映射
   N2 Feign 调用路径 ↔ 提供方 Controller 映射（含 ref_dirs）
   S1 Controller 入参 DTO 含身份字段（安全类，仅 WARN）
@@ -323,6 +324,47 @@ def md_table_after(text, heading_kw, header=False):
             elif rows and s: break
         if rows: return rows if header else rows[1:]
     return []
+
+
+def apply_kind(txt):
+    if re.search(r'适用\s*[:：]\s*升级清理', txt): return "upgrade"
+    if re.search(r'适用\s*[:：]\s*最终态', txt): return "final"
+    return None
+
+
+def heading_for(text, needle):
+    """needle 所在小节的标题行；没有则空串。"""
+    parts = re.split(r'(?m)^(#{1,3}\s+.+)$', text)
+    for i in range(1, len(parts), 2):
+        body = parts[i] + (parts[i + 1] if i + 1 < len(parts) else "")
+        if needle in body: return parts[i]
+    return ""
+
+
+def check_final_state(out, handoff, rep):
+    """Q4：最终态 vs 升级清理。新环境只跑最终态；升级清理不得进「你要做的」。"""
+    todo = ""
+    for p in ((handoff / "README.md") if handoff else None, out.parent / "00-当前位置.md"):
+        if p is None or not p.exists(): continue
+        m = re.search(r"你要做的[^\n]*\n(.*?)(?=\n## |\Z)", read(p), re.S)
+        if m: todo += m.group(1) + "\n"
+    manual = read(out / "S2-06-上线手册.md")
+    files = []
+    if (out / "S2-02-sql").is_dir():
+        files += [f for f in sorted((out / "S2-02-sql").glob("*.sql")) if f.name != "reset_test.sql"]
+    if (out / "S2-03-config").is_dir():
+        files += sorted(p for p in (out / "S2-03-config").iterdir() if p.is_file())
+    for f in files:
+        kind = apply_kind(read(f))
+        if kind is None:
+            rep.err("Q4", f"{f.name} 文件头缺「适用：最终态」或「适用：升级清理」（生命周期 › 单一真相源）"); continue
+        if kind != "upgrade": continue
+        if f.name in todo:
+            rep.err("Q4", f"{f.name} 是升级清理，不能进「你要做的」（只进手册三附）")
+        if f.name in manual:
+            h = heading_for(manual, f.name)
+            if h and not re.search(r"升级清理|三附", h):
+                rep.err("Q4", f"{f.name} 是升级清理，却出现在手册「{h.strip('#').strip()}」；只许放在含「升级清理」或「三附」的节")
 
 
 def check_sql_reentrant(sf, rep):
@@ -1190,6 +1232,7 @@ def run(a):
         h = hashlib.sha256(sf.read_bytes()).hexdigest()
         if sf.name in manual and f"sha256:{h}" in manual: continue
         rep.err("Q1", f"上线手册里没有 {sf.name} 的原文，也没有「{sf.name} sha256:{h}」引用")
+    check_final_state(out, handoff, rep)
 
     s1 = Path(a.s1) if getattr(a, "s1", None) else out.parent / "S1"
     if s1.is_dir():
@@ -1288,16 +1331,21 @@ def selftest():
             {"name": "登录", "request": {"url": "{{baseUrl}}/auth/login"}},
             {"name": "列表", "item": [{"name": "AC-01 列表", "request": {"url": {"raw": "{{baseUrl}}/svc/svcapi/new/_search?x=1"}}},
                                     {"name": "AC-01 反例", "request": {"url": "{{baseUrl}}/svc/svcapi/nope"}}]}]}), encoding="utf-8")
-        (out / "S2-02-sql/new.sql").write_text("CREATE TABLE IF NOT EXISTS `tb_new` (\n  `id` bigint NOT NULL,\n  `apply_no` varchar(32)\n) ENGINE=InnoDB;\n", encoding="utf-8")
+        (out / "S2-02-sql/new.sql").write_text("-- 适用：最终态\nCREATE TABLE IF NOT EXISTS `tb_new` (\n  `id` bigint NOT NULL,\n  `apply_no` varchar(32)\n) ENGINE=InnoDB;\n", encoding="utf-8")
         data_sql = "INSERT INTO tb_dict (id, code) VALUES (1, 'A');\nDELETE FROM tb_menu WHERE id = 9;\nINSERT INTO tb_menu (id) VALUES (9);\n"
-        (out / "S2-02-sql/data.sql").write_text(data_sql, encoding="utf-8")
+        (out / "S2-02-sql/data.sql").write_text("-- 适用：最终态\n" + data_sql, encoding="utf-8")
         big = "".join(f"INSERT INTO tb_cfg (k) SELECT 'k{i}' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM tb_cfg WHERE k = 'k{i}');\n" for i in range(8))
-        (out / "S2-02-sql/big.sql").write_text(big, encoding="utf-8")
+        (out / "S2-02-sql/big.sql").write_text("-- 适用：最终态\n" + big, encoding="utf-8")
+        (out / "S2-02-sql/mig.sql").write_text("-- 适用：升级清理\nALTER TABLE tb_new MODIFY apply_no varchar(64);\n", encoding="utf-8")
+        (out / "S2-02-sql/bare.sql").write_text("CREATE TABLE IF NOT EXISTS `tb_bare` (`id` bigint) ENGINE=InnoDB;\n", encoding="utf-8")
         big_hash = hashlib.sha256((out / "S2-02-sql/big.sql").read_bytes()).hexdigest()
+        mig_hash = hashlib.sha256((out / "S2-02-sql/mig.sql").read_bytes()).hexdigest()
         (out / "S2-06-上线手册.md").write_text("```sql\nCREATE TABLE IF NOT EXISTS `tb_new` (\n  `id` bigint NOT NULL,\n  `apply_no` varchar(64)\n) ENGINE=InnoDB;\n```\n"
                                        f"```sql\n{data_sql}```\n执行 S2-02-sql/big.sql sha256:{big_hash}\n"
+                                       f"## 二库\n执行 S2-02-sql/mig.sql sha256:{mig_hash}\n"
                                        "```\n  - /svcapi/new/_search\n```\n", encoding="utf-8")
-        (out / "S2-03-config/a.diff").write_text("+  - /svcapi/new/_search\n+  - /svcapi/ghost/_x\n", encoding="utf-8")
+        (out / "S2-03-config/a.diff").write_text("# 适用：最终态\n+  - /svcapi/new/_search\n+  - /svcapi/ghost/_x\n", encoding="utf-8")
+        (out / "README.md").write_text("| 交付可用性 | 通过 |\n你要做的（目录：x）\n1. SQL：`mig.sql` — 粘回：ok\n仍待你回报：无\n", encoding="utf-8")
         s1 = T / "S1"; s1.mkdir()
         (s1 / "S1-03-代码走读.md").write_text("### 接触点\n| 层 | 参照 | 本需求做法（仿 / 改 / 新建） |\n|---|---|---|\n| 入口 | svc-a NewController | 新建 |\n"
                                      "| 其他服务 | svc-b `a.txt` | 改：加接口 |\n| 配置 | web-a-cfg | 不改 |\n", encoding="utf-8")
@@ -1323,7 +1371,7 @@ def selftest():
         has = lambda lv, c, s="": any(l == lv and k == c and s in m for l, k, m in msgs)
         failures = []
         for want, s in (("J1", "NotExist"), ("J2", "wrong_field"), ("J3", "setProjectMode"), ("J4", "BizError"), ("J5", "m5"), ("C3", "SendReq"), ("C3", "公共目录"),
-                        ("F1", "missing"), ("Q1", ""), ("Q2", "ghost")):
+                        ("F1", "missing"), ("Q1", ""), ("Q2", "ghost"), ("Q4", "bare.sql"), ("Q4", "mig.sql")):
             if not has("ERROR", want, s): failures.append(f"期望 ERROR {want} 未触发")
         if not has("WARN", "N1", "ghost"): failures.append("期望 WARN N1 未触发")
         if not has("WARN", "F2", "_nope"): failures.append("期望 WARN F2 未触发")
@@ -1338,6 +1386,8 @@ def selftest():
         for want, s in (("Q3", "tb_dict"), ("T1", "mode.ts"), ("A1", "/svcapi/ghost"), ("A1", "/svc/svcapi/nope"), ("A1", "AC-02"), ("C1", "web-b"), ("C1", "svc-d"), ("C1", "missing.ts"), ("R1", "AC-03"), ("R1", "Nope.java"), ("R1", "P-01"), ("R1", "AC-04"),
                         ("R1", "AC-05"), ("R1", "AC-06"), ("R1", "审查会话"), ("C2", "svc-b"), ("U2", "svc-z"), ("H2", "out.txt"), ("V1", "AC-01"), ("X1", "正文.md")):
             if not has("ERROR", want, s): failures.append(f"期望 ERROR {want}（{s}）未触发")
+        if not any(c == "Q4" and "你要做的" in m for _, c, m in msgs): failures.append("期望 ERROR Q4（升级清理进你要做的）未触发")
+        if not any(c == "Q4" and "二库" in m for _, c, m in msgs): failures.append("期望 ERROR Q4（升级清理在非三附节）未触发")
         for c, s in (("Q3", "tb_menu"), ("Q1", "big.sql"), ("C1", "svc-a"), ("C1", "svc-c"), ("C1", "new.ts"), ("R1", "AC-01"), ("R1", "AC-07"), ("R1", "P-02"), ("N2", "/inner/b/ok"),
                      ("C2", "svc-a"), ("C2", "web-a"), ("U2", "svc-a"), ("U2", "a-svc"), ("C3", "new.ts"), ("D1", ""), ("A1", "_search"), ("A1", "login"), ("A1", "AC-01,"), ("V1", "AC-07")):
             if has("ERROR", c, s) or has("WARN", c, s): failures.append(f"{c}（{s}）不应报")
@@ -1564,7 +1614,7 @@ def selftest():
         print(text); print("---")
         if failures:
             print("SELFTEST FAIL"); [print(" -", f) for f in failures]; return 1
-        print("SELFTEST PASS（J1 J2 J3 J5 X2 F1 F2 Q1 Q2 Q3 N1 N2 S1 C1 C2 C3 D1 R1 H2-H8 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
+        print("SELFTEST PASS（J1 J2 J3 J5 X2 F1 F2 Q1-Q4 N1 N2 S1 C1 C2 C3 D1 R1 H2-H8 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
     finally:
         shutil.rmtree(T, ignore_errors=True)
 
