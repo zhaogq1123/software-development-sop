@@ -38,7 +38,8 @@ S2 交付前静态检查。任何环境形态都先跑；它不替代编译、�
   D1 新功能 S1：评审摘要、验收剧本、路径矩阵、接口三列、按建议会怎样、术语映射；精简版 S1-07 要有评审摘要、验收剧本、按建议会怎样、交付选项
   D2 决定表里状态为有效的 D-xx 必须出现在验收里；有设计说明就得有决定表
   R1 S2-08-审查.md：AC 全覆盖、结论用规定词、引用位置存在、环境登记的节名在上线手册里、阻塞类问题无「待修」、文内含「审查会话：新会话」
-  V1 审查结论为已实现或环境登记的 AC 必须写进验证清单；改动面含页面文件时清单须有浏览器操作
+  V1 审查结论为已实现或环境登记的 AC 必须写进验证清单；改动面含页面时清单须有浏览器操作；
+     清单里未标「纯 UI」的页面/浏览器 AC 须出现在 S2-04-verify/cases.json（或冒烟 Postman）
   X1 S1/S1-00-原文/正文.md 为 UTF-8 且无替换字符；media/ 每张图在清单里有状态，待看和无法看不能过
   K1 类型为小改动、线上缺陷、纯配置时，不得另有新建表、平台登记或（纯配置）代码改动
   U1 大仓里未检查的改动目录        U2 改动包里的 patch 都对应一个 --repo（patch 名可经 config.patch_names 映射到目录名）
@@ -999,8 +1000,21 @@ def check_review(s1, out, repo_dirs, cfg, rep):
             rep.err("V1", f"{ac} 审查结论是已实现或环境登记，S2-07-验证清单.md 没有这条。清单全过盖不住没列入的验收")
     doc = next((s1 / f for f in ("S1-04-设计说明.md", "S1-07-设计.md") if (s1 / f).exists()), None)
     plan = "\n".join(" ".join(c) for c in (md_table_after(read(doc), "改动面") or [])) if doc else ""
-    if re.search(r"\.(vue|html|htm|jsx|tsx|jsp)\b", plan, re.I) and "浏览器" not in checklist:
-        rep.err("V1", "改动面含页面文件，验证清单须有浏览器操作（只读代码不算该条通过）")
+    if re.search(r"\.(vue|html|htm|jsx|tsx|jsp)\b", plan, re.I):
+        if "浏览器" not in checklist:
+            rep.err("V1", "改动面含页面文件，验证清单须有浏览器操作（只读代码不算该条通过）")
+        verified_acs = set(AC_RE.findall(read(cj) if cj.exists() else ""))
+        api_dir = out / "S2-05-api"
+        if api_dir.is_dir():
+            for pf in api_dir.glob("*postman*"): verified_acs |= set(AC_RE.findall(read(pf)))
+            for pf in api_dir.glob("*.json"): verified_acs |= set(AC_RE.findall(read(pf)))
+        page_acs = set()
+        for line in checklist.splitlines():
+            if not re.search(r"浏览器|页面", line) or "纯 UI" in line: continue
+            page_acs |= set(AC_RE.findall(line))
+        miss = sorted(page_acs - verified_acs, key=lambda x: int(x[3:]))
+        if miss:
+            rep.err("V1", f"页面 AC {', '.join(miss)} 未进 verify/cases 或 Postman（能接口验的不要只靠手工；无接口则清单该行标「纯 UI」）")
     files = walk_files(repo_dirs, cfg)
     for path, line in sorted(set(LOC_RE.findall(rtxt))):
         tail = "/" + path.replace("\\", "/").lstrip("./")
@@ -1608,13 +1622,20 @@ def selftest():
         (pv / "S1-07-设计.md").write_text("## 改动面\n| 仓 | 文件 |\n|---|---|\n| web | a.vue |\n", encoding="utf-8")
         pr = Report(); check_review(pv, out, [], DEFAULT_CONFIG, pr)
         if not any(c == "V1" and "浏览器" in m for _, c, m in pr.issues): failures.append("页面改动缺浏览器验证应报 V1")
+        (out / "S2-07-验证清单.md").write_text("| 4.2 | 页面可见 | AC-09 浏览器看弹层 | | 手工 |\n", encoding="utf-8")
+        (out / "S2-08-审查.md").write_text("审查会话：新会话\n## AC 实现映射\n| AC | 实现位置 | 结论 |\n|---|---|---|\n| AC-09 | web/a.vue:1 | 已实现 |\n", encoding="utf-8")
+        pr2 = Report(); check_review(pv, out, [], DEFAULT_CONFIG, pr2)
+        if not any(c == "V1" and "AC-09" in m and "纯 UI" in m for _, c, m in pr2.issues): failures.append("页面 AC 未进 verify 应报 V1")
+        (out / "S2-07-验证清单.md").write_text("| 4.2 | 页面可见 | AC-09 纯 UI 浏览器看布局 | | 手工 |\n浏览器\n", encoding="utf-8")
+        pr3 = Report(); check_review(pv, out, [], DEFAULT_CONFIG, pr3)
+        if any(c == "V1" and "AC-09" in m for _, c, m in pr3.issues): failures.append("标纯 UI 的页面 AC 不应要求 verify")
         buried = "### 评审摘要（一屏，不代替改动面）\n无表\n### 7. 改动面\n| 仓 | 文件 |\n|---|---|\n| web | b.vue |\n"
         hit = md_table_after(buried, "改动面")
         if not hit or "b.vue" not in hit[0]: failures.append("标题只提到改动面时仍应读到后面的表")
         print(text); print("---")
         if failures:
             print("SELFTEST FAIL"); [print(" -", f) for f in failures]; return 1
-        print("SELFTEST PASS（J1 J2 J3 J5 X2 F1 F2 Q1-Q4 N1 N2 S1 C1 C2 C3 D1 R1 H2-H8 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
+        print("SELFTEST PASS（J1 J2 J3 J5 X2 F1 F2 Q1-Q4 N1 N2 S1 C1 C2 C3 D1 R1 V1 H2-H8 T1 A1 U1 U2 E0 M1 L1-L3 均触发；防护项均不误报）"); return 0
     finally:
         shutil.rmtree(T, ignore_errors=True)
 
